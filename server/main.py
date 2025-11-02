@@ -166,7 +166,7 @@ def download_map_image(zoom, tile_x, tile_y):
     file_path = IMAGES_DIR / f"map_{zoom}_{tile_x}_{tile_y}.png"
 
     if not file_path.exists():
-        url = f"https://api.maptiler.com/maps/0199e42b-f3ba-728f-81a6-ba4d151cc8fb/{zoom}/{tile_x}/{tile_y}.png?key={api_secrets.MAPTILER_API_KEY}"        
+        url = f"https://api.maptiler.com/maps/0199e42b-f3ba-728f-81a6-ba4d151cc8fb/{zoom}/{tile_x}/{tile_y}.png?key={api_secrets.MAPTILER_API_KEY}"
         headers = {"User-Agent": "TileFetcher/1.0 (your.email@example.com)"}
         print(f"Downloading map image from {url}...")
         r = requests.get(url, headers=headers, timeout=10)
@@ -209,56 +209,43 @@ def download_range_of_tiles(zoom, tile_start_x, tile_start_y, tile_end_x, tile_e
         for y in range(tile_start_y, tile_end_y + 1):
             im_path = download_map_image(zoom, x, y)
             map_tiles[(x, y)] = Image.open(im_path)
-            # im_path = download_precip_image(zoom, x, y, ts, now_offset)
-            # precip_tiles_now[(x, y)] = Image.open(im_path)
-            # im_path = download_precip_image(zoom, x, y, ts, forecast_secs)
-            # precip_tiles_forecast[(x, y)] = Image.open(im_path)
+            im_path = download_precip_image(zoom, x, y, ts, now_offset)
+            precip_tiles_now[(x, y)] = Image.open(im_path)
+            im_path = download_precip_image(zoom, x, y, ts, forecast_secs)
+            precip_tiles_forecast[(x, y)] = Image.open(im_path)
 
     # assert all the values of each on the same size
     assert len(set(im.size for im in map_tiles.values())) == 1
-    # assert len(set(im.size for im in precip_tiles_now.values())) == 1
-    # assert len(set(im.size for im in precip_tiles_forecast.values())) == 1
+    assert len(set(im.size for im in precip_tiles_now.values())) == 1
+    assert len(set(im.size for im in precip_tiles_forecast.values())) == 1
 
     num_tiles_x = tile_end_x - tile_start_x + 1
     num_tiles_y = tile_end_y - tile_start_y + 1
 
     map_tile_width, map_tile_height = next(iter(map_tiles.values())).size
-    # precip_tile_width, precip_tile_height = next(iter(precip_tiles_forecast.values())).size
+    precip_tile_width, precip_tile_height = next(iter(precip_tiles_forecast.values())).size
 
 
     combined_map = Image.new("RGB", (map_tile_width * num_tiles_x, map_tile_height * num_tiles_y))
-    # combined_precip_now = Image.new("RGBA", (precip_tile_width * num_tiles_x, precip_tile_height * num_tiles_y))
-    # combined_precip_forecast = Image.new("RGBA", (precip_tile_width * num_tiles_x, precip_tile_height * num_tiles_y))
+    combined_precip_now = Image.new("RGBA", (precip_tile_width * num_tiles_x, precip_tile_height * num_tiles_y))
+    combined_precip_forecast = Image.new("RGBA", (precip_tile_width * num_tiles_x, precip_tile_height * num_tiles_y))
 
     # combine the tiles into one image
     for ix, x in enumerate(range(tile_start_x, tile_end_x + 1)):
         for iy, y in enumerate(range(tile_start_y, tile_end_y + 1)):
             map_tile = map_tiles[(x, y)]
-            # precip_tile_now = precip_tiles_now[(x, y)]
-            # precip_tile_forecast = precip_tiles_forecast[(x, y)]
+            precip_tile_now = precip_tiles_now[(x, y)]
+            precip_tile_forecast = precip_tiles_forecast[(x, y)]
             combined_map.paste(map_tile, (ix * map_tile_width, iy * map_tile_height))
-            # combined_precip_now.paste(precip_tile_now, (ix * precip_tile_width, iy * precip_tile_height))
-            # combined_precip_forecast.paste(precip_tile_forecast, (ix * precip_tile_width, iy * precip_tile_height))
+            combined_precip_now.paste(precip_tile_now, (ix * precip_tile_width, iy * precip_tile_height))
+            combined_precip_forecast.paste(precip_tile_forecast, (ix * precip_tile_width, iy * precip_tile_height))
 
-    combined_map.save(f"map_tiles_{zoom}_{tile_start_x}_{tile_start_y}_{tile_end_x}_{tile_end_y}.png")
-    # combined_precip_now.save(PRECIP_NOW_TILE_FILE)
-    # combined_precip_forecast.save(PRECIP_FORECAST_TILE_FILE)
+    combined_map.save(MAP_TILE_FILE)
+    combined_precip_now.save(PRECIP_NOW_TILE_FILE)
+    combined_precip_forecast.save(PRECIP_FORECAST_TILE_FILE)
     print("Combined map and precipitation tiles into single images.")
 
 def build_image():
-    zoom = 12
-    tile_x_start = 2000
-    tile_y_start = 330*4
-
-    num_tiles_x = 80
-    num_tiles_y = 80
-
-    download_range_of_tiles(zoom, tile_x_start, tile_y_start, tile_x_start + num_tiles_x - 1, tile_y_start + num_tiles_y - 1, None, None, None)
-
-    return
-
-
-
     # precip_ts = get_snapshot_timestamp()
     current_time = dt.datetime.now(tz=ZoneInfo("UTC"))
     snapshot_time = current_time - dt.timedelta(minutes=8)
@@ -355,15 +342,22 @@ def build_image():
     )
 
 
-    convert_to_bitmap(combined)
-    combined = ImageEnhance.Color(combined).enhance(1.3)
-    combined.save(COMBINED_FILE, progressive=False, quality=85)
-    print("Combined map.png and forecast.png into one image.")
+    convert_to_bitmap(combined, snapshot_time)
+    # combined = ImageEnhance.Color(combined).enhance(1.3)
+    # combined.save(COMBINED_FILE, progressive=False, quality=85)
+    # print("Combined map.png and forecast.png into one image.")
+
+def get_next_wake_time(current_snapshot_time: int) -> tuple[int, int]:
+    # wake up at the next 10 minute interval after current_snapshot_time + 20 minutes
+    current_dt = dt.datetime.fromtimestamp(current_snapshot_time, tz=ZoneInfo("Europe/London"))
+    target_dt = current_dt + dt.timedelta(minutes=20)
+    target_dt = target_dt.replace(minute=(target_dt.minute // 10) * 10, second=0, microsecond=0)
+    if target_dt <= current_dt:
+        target_dt += dt.timedelta(minutes=10)
+    return target_dt.hour, target_dt.minute
 
 
-
-
-def convert_to_bitmap(img):
+def convert_to_bitmap(img, snapshot_time: int):
 
     # Image to hold the quantize palette
     pal_img = Image.new("P", (1, 1))
@@ -440,9 +434,21 @@ def convert_to_bitmap(img):
             framebuffer[counter] = c
             counter += 1
 
+    # ipdb.set_trace()
+    header = bytearray(32)
+    header[:4] = "BZRR".encode("ascii")  # magic number
+    header[4:5] = (1).to_bytes(1, "little")  # version
+    header[6:14] = snapshot_time.to_bytes(8, "little")
+    (next_wake_up_time_hour_, next_wake_up_time_minute_) = get_next_wake_time(snapshot_time)
+    header[14:15] = (next_wake_up_time_hour_).to_bytes(1, "little")
+    header[15:16] = (next_wake_up_time_minute_).to_bytes(1, "little")
+
+    payload = header + framebuffer
+
     with open(QUANTIZED_BIN_FILE, "wb") as f:
-        f.write(framebuffer)
-    print("Wrote quantized framebuffer.")
+        f.write(payload)
+    print("Wrote binary payload.")
+
 
 
 if __name__ == "__main__":

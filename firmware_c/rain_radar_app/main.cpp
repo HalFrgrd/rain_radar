@@ -70,6 +70,9 @@ datetime_t dt = {
     .sec = 0,
 };
 
+int next_wakeup_min = 10;
+int next_wakeup_hour = -1;
+
 
 void draw_next_wakeup(InkyFrame &graphics, int hour, int minute)
 {
@@ -114,48 +117,28 @@ std::pair<Err, std::string> run_app()
     }
 
     inky_frame.set_pen(Inky73::GREEN);
-    // inky_frame.clear();
-
-    // ResultOr<data_fetching::ImageInfo> image_info_result = data_fetching::fetch_image_info(connected_ssid_index);
-    // if (!image_info_result.ok())
-    // {
-    //     return {image_info_result.err, "Image info fetch failed"};
-    // } else {
-    //     data_fetching::ImageInfo image_info = image_info_result.unwrap();
-        
-    //     // Use server datetime if available, otherwise convert Unix timestamp
-    //     if (image_info.has_server_datetime) {
-    //         dt = image_info.server_datetime;
-    //         printf("Using server datetime: %04d-%02d-%02d %02d:%02d:%02d\n", 
-    //                dt.year, dt.month, dt.day, dt.hour, dt.min, dt.sec);
-    //     } else {
-    //         // Fallback to Unix timestamp conversion
-    //         int64_t update_timestamp = image_info.update_ts;
-
-    //         if (time_to_datetime(unix_time, &dt)) {
-    //             printf("Using converted Unix timestamp: %04d-%02d-%02d %02d:%02d:%02d\n", 
-    //                    dt.year, dt.month, dt.day, dt.hour, dt.min, dt.sec);
-    //         } else {
-    //             printf("Failed to convert timestamp %lld to datetime\n", update_timestamp);
-    //             // Set a default datetime if conversion fails
-    //             dt.year = 2025;
-    //             dt.month = 1;
-    //             dt.day = 1;
-    //             dt.hour = 0;
-    //             dt.min = 0;
-    //             dt.sec = 0;
-    //             dt.dotw = 0;
-    //         }
-    //     }
-    // }
 
     // fetching the image will write to the PSRAM display directly
-    ResultOr<datetime_t> const res = data_fetching::fetch_image(inky_frame, connected_ssid_index);
+    ResultOr<data_fetching::ImageHeader> const res = data_fetching::fetch_image(inky_frame, connected_ssid_index);
     if (!res.ok())
     {
         return {res.err, "Image fetch failed"};
     } else {
-        dt = res.unwrap();
+        data_fetching::ImageHeader image_header = res.unwrap();
+        time_t update_ts = image_header.update_ts;
+        struct tm *tm_info = gmtime(&update_ts);
+
+        // Convert struct tm to datetime_t
+        dt.year  = tm_info->tm_year + 1900; // tm_year is years since 1900
+        dt.month = tm_info->tm_mon + 1;     // tm_mon is 0–11
+        dt.day   = tm_info->tm_mday;        // 1–31
+        dt.dotw  = tm_info->tm_wday;        // 0 = Sunday
+        dt.hour  = tm_info->tm_hour;
+        dt.min   = tm_info->tm_min;
+        dt.sec   = tm_info->tm_sec;
+        inky_frame.rtc.set_datetime(&dt);
+        next_wakeup_hour = image_header.next_wakeup_hours;
+        next_wakeup_min = image_header.next_wakeup_minutes;
     }
 
     // points of interest
@@ -211,26 +194,16 @@ int main()
 
     auto [app_err, app_msg] = run_app();
 
-    // the rain api updates every 10 mins, and the server runs on a 10 min schedule
-    int next_wakeup_min = 10;
-    int next_wakeup_hour = -1;
-
     if (app_err != Err::OK) {
         std::string error_msg = std::string(app_msg) + " (" + std::string(errToString(app_err)) + ")";
         printf("Error: %s\n", error_msg.c_str());
         draw_error(inky_frame, error_msg);
     } else {
-        inky_frame.rtc.set_datetime(&dt);
-        if(dt.hour >= 23 || dt.hour <= 5) {
-            next_wakeup_hour = 6;
-            next_wakeup_min = 0;
-        } else {
-            next_wakeup_hour = -1;
-            next_wakeup_min = (dt.min+1 + 10) / 10 * 10;
-            if (next_wakeup_min >= 60)
-            {
-                next_wakeup_min -= 60;
-            }
+        next_wakeup_hour = -1;
+        next_wakeup_min = (dt.min+1 + 10) / 10 * 10;
+        if (next_wakeup_min >= 60)
+        {
+            next_wakeup_min -= 60;
         }
     }
 

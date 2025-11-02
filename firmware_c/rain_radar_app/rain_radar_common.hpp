@@ -39,7 +39,7 @@ enum class Err : int8_t
     HTTP_SERVER_ERROR = -23,          // Other 5xx codes
     HTTP_UNKNOWN_ERROR = -24,         // Unrecognized HTTP status
 
-    COULDNT_PARSE_DATE = -25
+    COULDNT_PARSE_HEADER = -25
 };
 
 constexpr std::string_view errToString(Err r)
@@ -96,8 +96,8 @@ constexpr std::string_view errToString(Err r)
         return "HTTP_SERVER_ERROR";
     case Err::HTTP_UNKNOWN_ERROR:
         return "HTTP_UNKNOWN_ERROR";
-    case Err::COULDNT_PARSE_DATE:
-        return "COULDNT_PARSE_DATE";
+    case Err::COULDNT_PARSE_HEADER:
+        return "COULDNT_PARSE_HEADER";
     default:
         return "UNKNOWN";
     }

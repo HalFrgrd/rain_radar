@@ -7,16 +7,15 @@
 
 namespace data_fetching
 {
+    const uint32_t MAGIC_NUMBER = 0x425A5252; // "BZRR"
+    struct ImageHeader
+    {
+        int64_t update_ts;
+        uint32_t magic_number;
+        int8_t next_wakeup_hours;
+        int8_t next_wakeup_minutes;
+    };
 
-    // struct ImageInfo
-    // {
-    //     int64_t update_ts;
-    //     datetime_t server_datetime;
-    //     bool has_server_datetime;
-    //     // char image_text[64];
-    // };
-
-    // ResultOr<ImageInfo> fetch_image_info(int8_t connected_ssid_index);
-    ResultOr<datetime_t> fetch_image(pimoroni::InkyFrame &inky_frame, int8_t connected_ssid_index);
+    ResultOr<ImageHeader> fetch_image(pimoroni::InkyFrame &inky_frame, int8_t connected_ssid_index);
     
 }
