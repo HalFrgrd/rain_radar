@@ -248,19 +248,19 @@ def download_range_of_tiles(zoom, tile_start_x, tile_start_y, tile_end_x, tile_e
 def build_image():
     # precip_ts = get_snapshot_timestamp()
     current_time = dt.datetime.now(tz=ZoneInfo("UTC"))
-    snapshot_time = current_time - dt.timedelta(minutes=8)
-    snapshot_time = snapshot_time.replace(minute=(snapshot_time.minute // 10) * 10, second=0, microsecond=0)
+    snapshot_utc_ts = current_time - dt.timedelta(minutes=8)
+    snapshot_utc_ts = snapshot_utc_ts.replace(minute=(snapshot_utc_ts.minute // 10) * 10, second=0, microsecond=0)
 
     now_offset = 0
-    if snapshot_time + dt.timedelta(minutes=10) < current_time:
+    if snapshot_utc_ts + dt.timedelta(minutes=10) < current_time:
         now_offset = 600
-    snapshot_time = int(snapshot_time.timestamp())
-    current_map_time = snapshot_time + now_offset
+    snapshot_utc_ts = int(snapshot_utc_ts.timestamp())
+    current_map_time = snapshot_utc_ts + now_offset
 
 
-    print(f"Snapshot timestamp: {snapshot_time}")
+    print(f"Snapshot timestamp: {snapshot_utc_ts}")
     FORECAST_SECS = 1800
-    download_range_of_tiles(ZOOM, TILE_X, TILE_Y, TILE_X+1, TILE_Y+1, snapshot_time, now_offset, FORECAST_SECS)
+    download_range_of_tiles(ZOOM, TILE_X, TILE_Y, TILE_X+1, TILE_Y+1, snapshot_utc_ts, now_offset, FORECAST_SECS)
 
     with open(IMAGE_INFO_FILE, "w") as f:
         current_time_dt = int(dt.datetime.now(tz=ZoneInfo("Europe/London")).timestamp())
@@ -341,23 +341,21 @@ def build_image():
         (DESIRED_WIDTH, DESIRED_HEIGHT), resample=Image.BILINEAR
     )
 
+    convert_to_bitmap(combined, snapshot_utc_ts)
 
-    convert_to_bitmap(combined, snapshot_time)
-    # combined = ImageEnhance.Color(combined).enhance(1.3)
-    # combined.save(COMBINED_FILE, progressive=False, quality=85)
-    # print("Combined map.png and forecast.png into one image.")
+def get_next_wake_time(current_dt) -> tuple[int, int]:
+    # wake up at the next 10 minute interval after current_snapshot_time + 21 minutes
 
-def get_next_wake_time(current_snapshot_time: int) -> tuple[int, int]:
-    # wake up at the next 10 minute interval after current_snapshot_time + 20 minutes
-    current_dt = dt.datetime.fromtimestamp(current_snapshot_time, tz=ZoneInfo("Europe/London"))
-    target_dt = current_dt + dt.timedelta(minutes=20)
-    target_dt = target_dt.replace(minute=(target_dt.minute // 10) * 10, second=0, microsecond=0)
-    if target_dt <= current_dt:
-        target_dt += dt.timedelta(minutes=10)
-    return target_dt.hour, target_dt.minute
+    if current_dt.hour >= 21 or current_dt.hour < 7:
+        return 7, 0  # 7:00 AM
+
+    if 7 <= current_dt.hour < 10 or 16 <= current_dt.hour < 20:
+        return -1, (current_dt.minute + 20) // 10 * 10 % 60
+    
+    return -1, (current_dt.minute + 40) // 10 * 10 % 60
 
 
-def convert_to_bitmap(img, snapshot_time: int):
+def convert_to_bitmap(img, _: int):
 
     # Image to hold the quantize palette
     pal_img = Image.new("P", (1, 1))
@@ -438,8 +436,12 @@ def convert_to_bitmap(img, snapshot_time: int):
     header = bytearray(32)
     header[:4] = "BZRR".encode("ascii")  # magic number
     header[4:5] = (1).to_bytes(1, "little")  # version
-    header[6:14] = snapshot_time.to_bytes(8, "little")
-    (next_wake_up_time_hour_, next_wake_up_time_minute_) = get_next_wake_time(snapshot_time)
+
+    current_dt = dt.now()
+    current_dt_ts = int(current_dt.timestamp())
+
+    header[6:14] = current_dt_ts.to_bytes(8, "little")
+    (next_wake_up_time_hour_, next_wake_up_time_minute_) = get_next_wake_time(current_dt)
     header[14:15] = (next_wake_up_time_hour_).to_bytes(1, "little")
     header[15:16] = (next_wake_up_time_minute_).to_bytes(1, "little")
 

@@ -38,14 +38,14 @@ namespace data_fetching
         pimoroni::PSRamDisplay &psram_display;
         size_t const max_address_write;
         size_t offset = 0;
-        ImageHeader image_header;
+        uint8_t header_buffer[32];
         Err result;
 
         ImageWriterHelper(pimoroni::InkyFrame &inky_frame)
             : psram_display(inky_frame.ramDisplay)
             , max_address_write(inky_frame.width * inky_frame.height)
             , offset(0)
-            , image_header()
+            , header_buffer()
             , result(Err::OK)
         {
         }
@@ -63,41 +63,39 @@ namespace data_fetching
         ImageWriterHelper *image_writer = (ImageWriterHelper *)_arg;
 
         // TODO: handle pbuf chains
-        size_t body_len = p->len;
-        const uint8_t *body_data = (const uint8_t *)p->payload;
+        const size_t body_len = p->len;
+        size_t body_offset = 0;
+        const uint8_t * const body_data = (uint8_t *)p->payload;
 
-        if (image_writer->offset < 32) {
-            assert(image_writer->offset==0);
-            assert(body_len >= 32);
-            // parse header
-            int32_t magic_number = *((int32_t*)body_data);
-            int8_t version = *((int8_t*)(body_data+4));
-            int64_t update_ts = *((int64_t*)(body_data+6));
-            int8_t next_wakeup_hours = *((int8_t*)(body_data+14));
-            int8_t next_wakeup_minutes = *((int8_t*)(body_data+15));
-            printf("Image header: magic=0x%08X version=%d update_ts=%lld next_wakeup=%02d:%02d\n",
-                magic_number, version, update_ts, next_wakeup_hours, next_wakeup_minutes);
-            image_writer->image_header.magic_number = magic_number;
-            image_writer->image_header.update_ts = update_ts;
-            image_writer->image_header.next_wakeup_hours = next_wakeup_hours;
-            image_writer->image_header.next_wakeup_minutes = next_wakeup_minutes;
-            body_data += 32;
-            body_len -= 32;
-            image_writer->offset += 32;
-
+        if (image_writer->offset < HEADER_SIZE) {
+            size_t header_bytes_to_copy = HEADER_SIZE - image_writer->offset;
+            size_t header_bytes_available = body_len < header_bytes_to_copy ? body_len : header_bytes_to_copy;
+            memcpy(image_writer->header_buffer + image_writer->offset, body_data, header_bytes_available);
+            image_writer->offset += header_bytes_available;
+            body_offset += header_bytes_available;
+            printf("Copied %zu header bytes, total copied: %zu\n", header_bytes_available, image_writer->offset);
         }
-
-        // Ive had to modify PSRamDisplay to make the write function and pointToAddress public
-        size_t offset = image_writer->offset;
         
-        size_t payload_offset = offset + body_len;
-        if (payload_offset > image_writer->max_address_write)
-        {
-            printf("Image data exceeds display size\n");
-            return ERR_BUF;
+        if (body_offset < body_len) {
+            const size_t bytes_left_in_body = body_len - body_offset;
+            
+            assert(image_writer->offset >= HEADER_SIZE);
+            size_t framebuffer_offset = image_writer->offset - HEADER_SIZE;
+
+            size_t next_framebuffer_offset = framebuffer_offset + bytes_left_in_body;
+            if (next_framebuffer_offset > image_writer->max_address_write)
+            {
+                printf("Image data exceeds display size\n");
+                // return ERR_BUF; // I think we want to consider this an error our on our side and not an error with the tcp connection
+                image_writer->result = Err::NO_MEMORY;
+            } else {
+                // printf("Writing %zu bytes to framebuffer at offset %zu\n", bytes_left_in_body, framebuffer_offset);
+                // Ive had to modify PSRamDisplay to make the write function and pointToAddress public
+                image_writer->psram_display.write_span(framebuffer_offset, bytes_left_in_body, body_data + body_offset);
+                image_writer->offset += bytes_left_in_body;
+            }
         }
-        image_writer->psram_display.write_span(offset, body_len, body_data);
-        image_writer->offset = payload_offset;
+
 
         // https://forums.raspberrypi.com/viewtopic.php?t=385648
         altcp_recved(conn, body_len);
@@ -156,12 +154,28 @@ namespace data_fetching
             return Err::ERROR;
         }
 
-        ImageHeader image_header = image_writer.image_header;
-        if (image_header.magic_number != data_fetching::MAGIC_NUMBER)
+        const uint8_t *header_data = image_writer.header_buffer;
+        uint32_t magic_number = *((uint32_t*)header_data);
+        int8_t version = *((int8_t*)(header_data+4));
+        int64_t update_ts = *((int64_t*)(header_data+6));
+        int8_t next_wakeup_hours = *((int8_t*)(header_data+14));
+        int8_t next_wakeup_minutes = *((int8_t*)(header_data+15));
+        printf("Image header: magic=0x%08X version=%d update_ts=%lld next_wakeup=%02d:%02d\n",
+            magic_number, version, update_ts, next_wakeup_hours, next_wakeup_minutes);
+
+        if (magic_number != data_fetching::MAGIC_NUMBER)
         {
             printf("Bad image header\n");
             return Err::COULDNT_PARSE_HEADER;
         }
+        printf("Image fetched successfully\n");
+
+        ImageHeader image_header {
+            .update_ts = update_ts,
+            .magic_number = magic_number,
+            .next_wakeup_hours = next_wakeup_hours,
+            .next_wakeup_minutes = next_wakeup_minutes
+        };
 
         return ResultOr<ImageHeader>(image_header);
     }

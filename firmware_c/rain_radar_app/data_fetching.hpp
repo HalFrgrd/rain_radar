@@ -7,7 +7,8 @@
 
 namespace data_fetching
 {
-    const uint32_t MAGIC_NUMBER = 0x425A5252; // "BZRR"
+    const uint32_t MAGIC_NUMBER = 0x52525A42; // "BZRR"
+    const uint32_t HEADER_SIZE = 32;
     struct ImageHeader
     {
         int64_t update_ts;

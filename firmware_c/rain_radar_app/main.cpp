@@ -116,7 +116,8 @@ std::pair<Err, std::string> run_app()
         persistent::save(&payload);
     }
 
-    inky_frame.set_pen(Inky73::GREEN);
+    inky_frame.set_pen(Inky73::RED);
+    inky_frame.clear();
 
     // fetching the image will write to the PSRAM display directly
     ResultOr<data_fetching::ImageHeader> const res = data_fetching::fetch_image(inky_frame, connected_ssid_index);
@@ -136,6 +137,8 @@ std::pair<Err, std::string> run_app()
         dt.hour  = tm_info->tm_hour;
         dt.min   = tm_info->tm_min;
         dt.sec   = tm_info->tm_sec;
+        printf("Image timestamp: %04d-%02d-%02d %02d:%02d:%02d UTC\n",
+            dt.year, dt.month, dt.day, dt.hour, dt.min, dt.sec);
         inky_frame.rtc.set_datetime(&dt);
         next_wakeup_hour = image_header.next_wakeup_hours;
         next_wakeup_min = image_header.next_wakeup_minutes;
