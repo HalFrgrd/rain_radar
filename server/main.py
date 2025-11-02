@@ -283,12 +283,12 @@ def build_image():
     precip_now_img = np.array(precip_now_img)
     precip_now_img[precip_now_img[:,:,3] != 0] = intensity_to_color(INTENSITY_MIN)
     precip_now_img = Image.fromarray(precip_now_img)
-    precip_now_img.save("debug_precip_now.png")
+    # precip_now_img.save("debug_precip_now.png")
     assert precip_now_img.mode == "RGBA"
     precip_combined_img = Image.new("RGBA", precip_now_img.size)
     precip_combined_img = Image.alpha_composite(precip_combined_img, precip_now_img)
     precip_combined_img = Image.alpha_composite(precip_combined_img, precip_forecast_img)
-    precip_combined_img.save("debug_precip_combined.png")
+    # precip_combined_img.save("debug_precip_combined.png")
 
     assert map_img.size[0] / map_img.size[1] == precip_combined_img.size[0] / precip_combined_img.size[1]
 
@@ -437,13 +437,13 @@ def convert_to_bitmap(img, _: int):
     header[:4] = "BZRR".encode("ascii")  # magic number
     header[4:5] = (1).to_bytes(1, "little")  # version
 
-    current_dt = dt.now()
+    current_dt = dt.datetime.now()
     current_dt_ts = int(current_dt.timestamp())
 
     header[6:14] = current_dt_ts.to_bytes(8, "little")
     (next_wake_up_time_hour_, next_wake_up_time_minute_) = get_next_wake_time(current_dt)
-    header[14:15] = (next_wake_up_time_hour_).to_bytes(1, "little")
-    header[15:16] = (next_wake_up_time_minute_).to_bytes(1, "little")
+    header[14:15] = (next_wake_up_time_hour_).to_bytes(1, "little", signed=True)
+    header[15:16] = (next_wake_up_time_minute_).to_bytes(1, "little", signed=True)
 
     payload = header + framebuffer
 
