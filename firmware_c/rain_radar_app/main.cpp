@@ -73,6 +73,29 @@ datetime_t dt = {
 int next_wakeup_min = 10;
 int next_wakeup_hour = -1;
 
+int get_mins_until_wakeup(int current_hour, int current_min, int wakeup_hour, int wakeup_min) {
+
+    if (wakeup_hour < 0) {
+        int mins_to_wakeup;
+        if (wakeup_min < current_min) {
+            mins_to_wakeup = (wakeup_min + 60) - current_min;
+        } else {
+            mins_to_wakeup = wakeup_min - current_min;
+        }
+        return mins_to_wakeup;
+    } else {
+        
+        int total_current_mins = current_hour * 60 + current_min;
+        int total_wakeup_mins = wakeup_hour * 60 + wakeup_min;
+        
+        if (total_wakeup_mins < total_current_mins) {
+            // Wakeup time is on the next day
+            total_wakeup_mins += 24 * 60;
+        }
+        
+        return total_wakeup_mins - total_current_mins;
+    }
+}
 
 void draw_next_wakeup(InkyFrame &graphics, int hour, int minute)
 {
@@ -81,12 +104,7 @@ void draw_next_wakeup(InkyFrame &graphics, int hour, int minute)
         oss << "Next update at " << std::setfill('0') << std::setw(2) << hour << ":"
             << std::setfill('0') << std::setw(2) << minute;
     } else {
-        int mins_to_wakeup;
-        if (minute < dt.min) {
-            mins_to_wakeup = (minute + 60) - dt.min;
-        } else {
-            mins_to_wakeup = minute - dt.min;
-        }
+        int mins_to_wakeup = get_mins_until_wakeup(dt.hour, dt.min, hour, minute);
         oss << "Next update in " << mins_to_wakeup << " min";
     }
 
@@ -167,6 +185,27 @@ std::pair<Err, std::string> run_app()
 
 }
 
+
+const uint HOLD_VSYS_EN = 2;
+
+void sleep_until(InkyFrame &inky_frame, int second, int minute, int hour, int day) {
+    if(second != -1 || minute != -1 || hour != -1 || day != -1) {
+      // set an alarm to wake inky up at the specified time and day
+      inky_frame.rtc.set_alarm(second, minute, hour, day);
+      inky_frame.rtc.enable_alarm_interrupt(true);
+    }
+
+    int wake_in_minutes = get_mins_until_wakeup(dt.hour, dt.min, hour, minute);
+
+    // release the vsys hold pin so that inky can go to sleep
+    gpio_put(HOLD_VSYS_EN, false);
+    // on battery the pico will power off and reboot here
+    // on usb power it won't fall asleep so we manually wait and then reboot
+    sleep_ms(std::max(10'000, wake_in_minutes * 60 * 1000));
+    watchdog_reboot(0, 0, 0);
+    while(true) {}
+}
+
 int main()
 {
     inky_frame.init();
@@ -200,14 +239,14 @@ int main()
     if (app_err != Err::OK) {
         std::string error_msg = std::string(app_msg) + " (" + std::string(errToString(app_err)) + ")";
         printf("Error: %s\n", error_msg.c_str());
-        draw_error(inky_frame, error_msg);
-    } else {
         next_wakeup_hour = -1;
         next_wakeup_min = (dt.min+1 + 10) / 10 * 10;
         if (next_wakeup_min >= 60)
         {
             next_wakeup_min -= 60;
         }
+        draw_error(inky_frame, error_msg);
+    } else {
     }
 
     draw_next_wakeup(inky_frame, next_wakeup_hour, next_wakeup_min);
@@ -220,7 +259,7 @@ int main()
 
     printf("done!\n");
 
-    inky_frame.sleep_until(-1, next_wakeup_min, next_wakeup_hour, -1);
+    sleep_until(inky_frame, -1, next_wakeup_min, next_wakeup_hour, -1);
 
     return 0;
 }

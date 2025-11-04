@@ -346,6 +346,8 @@ def build_image():
 def get_next_wake_time(current_dt) -> tuple[int, int]:
     # wake up at the next 10 minute interval after current_snapshot_time + 21 minutes
 
+    return -1, current_dt.minute 
+
     if current_dt.hour >= 21 or current_dt.hour < 7:
         return 7, 0  # 7:00 AM
 
