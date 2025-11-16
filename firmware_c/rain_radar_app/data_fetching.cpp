@@ -27,6 +27,7 @@
 #include "psram_display.hpp"
 #include "inky_frame_7.hpp"
 #include "pico/types.h"
+#include "pico/config.h" 
 
 #define HOST "muse-hub.taile8f45.ts.net"
 
@@ -124,7 +125,17 @@ namespace data_fetching
 
         http_client_util::http_req_t req = {0};
         req.hostname = HOST;
-        std::string url_str = "/" + std::to_string(connected_ssid_index) + "/quantized.bin";
+        
+        // Select image name based on board type
+#if PICO_RP2350
+        std::string const image_name = "quantized_pico2_w.bin";
+#elif PICO_RP2040
+        std::string const image_name = "quantized.bin";
+#else
+#error        
+#endif
+        
+        std::string const url_str = "/" + std::to_string(connected_ssid_index) + "/" + image_name;
         req.url = url_str.c_str();
         printf("Requesting URL: %s from %s\n", req.url, req.hostname);
 

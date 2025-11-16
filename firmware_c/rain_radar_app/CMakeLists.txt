@@ -4,7 +4,7 @@ cmake_minimum_required(VERSION 3.12)
 
 # this can be set here or from the command line
 # set(PICO_BOARD pico_w)
-set(PICO_BOARD pico2_w)
+# set(PICO_BOARD pico2_w)
 if(NOT DEFINED PICO_BOARD)
     message(FATAL_ERROR "PICO_BOARD must be set. Either uncomment one of the above lines or set it from command line (e.g., -DPICO_BOARD=pico2_w)")
 endif()
