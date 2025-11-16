@@ -27,8 +27,12 @@ jobs:
         docker compose run --rm rain_radar_app bash -c "
           cd /root/pico/rain_radar_app &&
           mv secrets_template.h secrets.h &&
-          mkdir -p build &&
-          cd build &&
+          mkdir -p build_pico_w &&
+          cd build_pico_w &&
+          cmake .. &&
+          make -j\$(nproc) &&
+          mkdir -p build_pico2_w &&
+          cd build_pico2_w &&
           cmake .. &&
           make -j\$(nproc)
         "
@@ -36,12 +40,18 @@ jobs:
     - name: List build artifacts
       run: |
         cd firmware_c/rain_radar_app/build
-        find . -name "*.uf2" -type f
-    
+        - name: List build artifacts
+          run: |
+            cd firmware_c/rain_radar_app
+            find build_pico_w build_pico2_w -name "*.uf2" -type f
+
     - name: Upload UF2 artifact
       uses: actions/upload-artifact@v4
       with:
         name: rain-radar-firmware
-        path: firmware_c/rain_radar_app/build/*.uf2
+        path: |
+          firmware_c/rain_radar_app/build_pico_w/*.uf2
+          firmware_c/rain_radar_app/build_pico2_w/*.uf2
         retention-days: 30
+
     

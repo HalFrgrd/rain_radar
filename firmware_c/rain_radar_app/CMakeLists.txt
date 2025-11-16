@@ -1,8 +1,16 @@
 cmake_minimum_required(VERSION 3.12)
 
+
+
+# this can be set here or from the command line
+# set(PICO_BOARD pico_w)
+set(PICO_BOARD pico2_w)
+if(NOT DEFINED PICO_BOARD)
+    message(FATAL_ERROR "PICO_BOARD must be set. Either uncomment one of the above lines or set it from command line (e.g., -DPICO_BOARD=pico2_w)")
+endif()
+
 # Change your executable name to something creative!
-set(NAME rain_radar)
-set(PICO_BOARD pico_w)
+set(NAME rain_radar_${PICO_BOARD})
 
 include(pico_sdk_import.cmake)
 include(pimoroni_pico_import.cmake)
@@ -47,7 +55,6 @@ target_link_libraries(${NAME}
     hardware_spi
     hardware_i2c
     hardware_flash
-    hardware_rtc
     hardware_adc
     fatfs
     sdcard

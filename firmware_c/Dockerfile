@@ -1,4 +1,4 @@
-# Dockerfile - Raspberry Pi Pico (RP2040) C/C++ development environment
+# Dockerfile - Raspberry Pi Pico (RP2040 / RP2350) C/C++ development environment
 FROM ubuntu:22.04
 
 ENV DEBIAN_FRONTEND=noninteractive \
