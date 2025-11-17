@@ -439,7 +439,7 @@ def convert_to_bitmap(img, pico_variant: str):
         # x,y = 100,200
         # draw.ellipse((x,y,x+w,y+w), fill=(255,0,0))
 
-    if pico_variant == "pico2_w":
+    if draw_palette := False:
         draw = ImageDraw.Draw(quantized_img)
         for i in range(len(palette)//3):
             color = (palette[i*3], palette[i*3+1], palette[i*3+2])
