@@ -31,27 +31,55 @@
 
 using namespace pimoroni;
 
+#if PICO_RP2350
+enum Colours : uint8_t {
+    BLACK = 0,
+    BLACK2 = 1,
+    YELLOW = 2,
+    RED = 3,
+    WHITE = 4,
+    BLUE = 5,
+    GREEN = 6,
+    CLEAN = 7
+};
+#elif PICO_RP2040
+enum Colours : uint8_t {
+    BLACK = 0,
+    WHITE = 1,
+    GREEN = 2,
+    BLUE = 3,
+    RED = 4,
+    YELLOW = 5,
+    ORANGE = 6,
+    CLEAN = 7
+};
+
+#else
+#error        
+#endif
+
+
 InkyFrame inky_frame;
 void draw_error(InkyFrame &graphics, const std::string_view &msg)
 {
 
-    graphics.set_pen(Inky73::RED);
+    graphics.set_pen(Colours::RED);
     graphics.rectangle(Rect(graphics.width / 3, graphics.height * 2 / 3, graphics.width / 3, graphics.height / 4));
-    graphics.set_pen(Inky73::WHITE);
+    graphics.set_pen(Colours::WHITE);
     graphics.text(msg, Point(graphics.width / 3 + 5, graphics.height * 2 / 3 + 5), graphics.width / 3 - 5, 2);
 }
 
 // void draw_lower_left_text(InkyFrame &graphics, const std::string_view &msg)
 // {
-//     // graphics.set_pen(Inky73::BLACK);
+//     // graphics.set_pen(Colours::BLACK);
 //     // graphics.rectangle(Rect(0, graphics.height - 25, graphics.width, 25));
-//     graphics.set_pen(Inky73::WHITE);
+//     graphics.set_pen(Colours::WHITE);
 //     graphics.text(msg, Point(5, graphics.height - 17), graphics.width / 2, 2);
 // }
 
 void draw_battery_status(InkyFrame &graphics, const char *status)
 {
-    graphics.set_pen(Inky73::WHITE);
+    graphics.set_pen(Colours::WHITE);
 
     // Measure text width to right-align it
     int text_width = graphics.measure_text(status, 1);
@@ -110,7 +138,7 @@ void draw_next_wakeup(InkyFrame &graphics, int hour, int minute)
 
     int text_width = graphics.measure_text(oss.str(), 1);
 
-    graphics.set_pen(Inky73::WHITE);
+    graphics.set_pen(Colours::WHITE);
     graphics.text(oss.str(), Point(graphics.width-60 - text_width, 5), graphics.width, 1);
 }
 
@@ -134,7 +162,7 @@ std::pair<Err, std::string> run_app()
         persistent::save(&payload);
     }
 
-    inky_frame.set_pen(Inky73::RED);
+    inky_frame.set_pen(Colours::RED);
     inky_frame.clear();
 
     // fetching the image will write to the PSRAM display directly
@@ -165,9 +193,9 @@ std::pair<Err, std::string> run_app()
     // points of interest
     for (const auto &poi : secrets::POINTS_OF_INTEREST_XY)
     {
-        inky_frame.set_pen(Inky73::WHITE);
+        inky_frame.set_pen(Colours::WHITE);
         inky_frame.circle(Point(poi[0], poi[1]), 3);
-        inky_frame.set_pen(Inky73::RED);
+        inky_frame.set_pen(Colours::RED);
         inky_frame.circle(Point(poi[0], poi[1]), 2);
     }
 
