@@ -24,7 +24,9 @@ MAP_TILE_FILE = IMAGES_DIR / ("map.png")
 QRCODE_FILE = IMAGES_DIR / ("qrcode.png")
 COMBINED_FILE = IMAGES_DIR / ("combined.jpg")
 QUANTIZED_BIN_FILE = IMAGES_DIR / ("quantized.bin")
-QUANTIZED_PNG_FILE = IMAGES_DIR / ("quantized.png")
+QUANTIZED_PICO2W_BIN_FILE = IMAGES_DIR / ("quantized_pico2_w.bin")
+QUANTIZED_PNG_FILE = QUANTIZED_BIN_FILE.with_suffix(".png")
+QUANTIZED_PICO2W_PNG_FILE = QUANTIZED_PICO2W_BIN_FILE.with_suffix(".png")
 IMAGE_INFO_FILE = IMAGES_DIR / ("image_info.txt")
 
 INTENSITY_MIN = 20
@@ -341,7 +343,8 @@ def build_image():
         (DESIRED_WIDTH, DESIRED_HEIGHT), resample=Image.BILINEAR
     )
 
-    convert_to_bitmap(combined, snapshot_utc_ts)
+    convert_to_bitmap(combined, "pico_w")
+    convert_to_bitmap(combined, "pico2_w")
 
 def get_next_wake_time(current_dt) -> tuple[int, int]:
     # wake up at the next 10 minute interval after current_snapshot_time + 21 minutes
@@ -355,12 +358,24 @@ def get_next_wake_time(current_dt) -> tuple[int, int]:
     return -1, (current_dt.minute + 40) // 10 * 10 % 60
 
 
-def convert_to_bitmap(img, _: int):
+def convert_to_bitmap(img, pico_variant: str):
+
+    # Convert the image to the appropriate format for the specified Pico variant
+    if pico_variant == "pico_w":
+        palette = INKY_FRAME_PALETTE
+        quantized_png_file = QUANTIZED_PNG_FILE
+        quantized_bin_file = QUANTIZED_BIN_FILE
+    elif pico_variant == "pico2_w":
+        palette = INKY_FRAME_PALETTE
+        quantized_png_file = QUANTIZED_PICO2W_PNG_FILE
+        quantized_bin_file = QUANTIZED_PICO2W_BIN_FILE
+    else:
+        raise ValueError(f"Unknown pico variant: {pico_variant}")
 
     # Image to hold the quantize palette
     pal_img = Image.new("P", (1, 1))
 
-    pal_img.putpalette(INKY_FRAME_PALETTE, rawmode="RGB")
+    pal_img.putpalette(palette, rawmode="RGB")
 
     # draw a bar in the bottom right showing the colour intesity legend using intensity_to_color
     if add_legend := True:
@@ -413,9 +428,17 @@ def convert_to_bitmap(img, _: int):
         # x,y = 100,200
         # draw.ellipse((x,y,x+w,y+w), fill=(255,0,0))
 
+    if pico_variant == "pico2_w":
+        draw = ImageDraw.Draw(quantized_img)
+        for i in range(len(palette)//3):
+            color = (palette[i*3], palette[i*3+1], palette[i*3+2])
+            x = DESIRED_WIDTH - (i+1)*20
+            y = 3
+            draw.rectangle((x, y, x+18, y+18), fill=color)
+
 
     # so we can see it
-    quantized_img.convert("RGB").save(QUANTIZED_PNG_FILE)
+    quantized_img.convert("RGB").save(quantized_png_file)
 
     # for other picos, the frame buffer on the pico is logically 3 single bit planes one after anther.
     # plane_0[x,y] = bit 0 of color
@@ -447,7 +470,7 @@ def convert_to_bitmap(img, _: int):
 
     payload = header + framebuffer
 
-    with open(QUANTIZED_BIN_FILE, "wb") as f:
+    with open(quantized_bin_file, "wb") as f:
         f.write(payload)
     print("Wrote binary payload.")
 
@@ -474,7 +497,9 @@ if __name__ == "__main__":
                 deploy_dir = Path(f"publicly_available/{i}")
             deploy_dir.mkdir(exist_ok=True)
             shutil.copy(QUANTIZED_PNG_FILE, deploy_dir / QUANTIZED_PNG_FILE.name)
+            shutil.copy(QUANTIZED_PICO2W_PNG_FILE, deploy_dir / QUANTIZED_PICO2W_PNG_FILE.name)
             shutil.copy(QUANTIZED_BIN_FILE, deploy_dir / QUANTIZED_BIN_FILE.name)
+            shutil.copy(QUANTIZED_PICO2W_BIN_FILE, deploy_dir / QUANTIZED_PICO2W_BIN_FILE.name)
             shutil.copy(IMAGE_INFO_FILE, deploy_dir / IMAGE_INFO_FILE.name)
             print(f"Copied images to {deploy_dir}")
 
