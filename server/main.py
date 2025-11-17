@@ -53,9 +53,9 @@ INKY_FRAME_PALETTE = (
 INKY_FRAME_SPECTRA_PALETTE = (
     *BLACK,
     *BLACK,
-    *WHITE,
     *YELLOW,
     *RED,
+    *WHITE,
     *BLUE,
     *GREEN,
 )
