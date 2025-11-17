@@ -50,6 +50,17 @@ INKY_FRAME_PALETTE = (
     *ORANGE,
 )
 
+INKY_FRAME_SPECTRA_PALETTE = (
+    *BLACK,
+    *WHITE,
+    *YELLOW,
+    *RED,
+    *BLUE,
+    *GREEN,
+    *BLACK,
+)
+
+
 def get_snapshot_timestamp():
     response = requests.get(
         f"https://api.rainbow.ai/tiles/v1/snapshot?token={api_secrets.RAINBOW_API_TOKEN}"
@@ -366,7 +377,7 @@ def convert_to_bitmap(img, pico_variant: str):
         quantized_png_file = QUANTIZED_PNG_FILE
         quantized_bin_file = QUANTIZED_BIN_FILE
     elif pico_variant == "pico2_w":
-        palette = INKY_FRAME_PALETTE
+        palette = INKY_FRAME_SPECTRA_PALETTE
         quantized_png_file = QUANTIZED_PICO2W_PNG_FILE
         quantized_bin_file = QUANTIZED_PICO2W_BIN_FILE
     else:
