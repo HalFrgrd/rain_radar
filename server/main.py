@@ -479,6 +479,9 @@ def convert_to_bitmap(img, pico_variant: str):
     header[14:15] = (next_wake_up_time_hour_).to_bytes(1, "little", signed=True)
     header[15:16] = (next_wake_up_time_minute_).to_bytes(1, "little", signed=True)
 
+    header[16] = False # draw extra info
+    header[17] = False # draw battery info
+
     payload = header + framebuffer
 
     with open(quantized_bin_file, "wb") as f:

@@ -15,6 +15,8 @@ namespace data_fetching
         uint32_t magic_number;
         int8_t next_wakeup_hours;
         int8_t next_wakeup_minutes;
+        bool draw_extra;
+        bool draw_battery;
     };
 
     ResultOr<ImageHeader> fetch_image(pimoroni::InkyFrame &inky_frame, int8_t connected_ssid_index);

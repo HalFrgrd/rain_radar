@@ -171,6 +171,9 @@ namespace data_fetching
         int64_t update_ts = *((int64_t*)(header_data+6));
         int8_t next_wakeup_hours = *((int8_t*)(header_data+14));
         int8_t next_wakeup_minutes = *((int8_t*)(header_data+15));
+        bool draw_extra = *((int8_t*)(header_data+16));
+        bool draw_battery = *((int8_t*)(header_data+17));
+
         printf("Image header: magic=0x%08X version=%d update_ts=%lld next_wakeup=%02d:%02d\n",
             magic_number, version, update_ts, next_wakeup_hours, next_wakeup_minutes);
 
@@ -185,7 +188,9 @@ namespace data_fetching
             .update_ts = update_ts,
             .magic_number = magic_number,
             .next_wakeup_hours = next_wakeup_hours,
-            .next_wakeup_minutes = next_wakeup_minutes
+            .next_wakeup_minutes = next_wakeup_minutes,
+            .draw_extra = draw_extra,
+            .draw_battery = draw_battery
         };
 
         return ResultOr<ImageHeader>(image_header);

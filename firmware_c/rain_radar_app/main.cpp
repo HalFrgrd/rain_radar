@@ -62,7 +62,6 @@ enum Colours : uint8_t {
 InkyFrame inky_frame;
 void draw_error(InkyFrame &graphics, const std::string_view &msg)
 {
-
     graphics.set_pen(Colours::RED);
     graphics.rectangle(Rect(graphics.width / 3, graphics.height * 2 / 3, graphics.width / 3, graphics.height / 4));
     graphics.set_pen(Colours::WHITE);
@@ -144,7 +143,7 @@ void draw_next_wakeup(InkyFrame &graphics, int hour, int minute)
 
 
 
-std::pair<Err, std::string> run_app()
+std::tuple<Err, std::string, bool> run_app()
 {
 
     persistent::PersistentData payload = persistent::read();
@@ -152,7 +151,7 @@ std::pair<Err, std::string> run_app()
     ResultOr<int8_t> new_preferred_ssid_index = wifi_setup::wifi_connect(inky_frame, payload.wifi_preferred_ssid_index);
     if (!new_preferred_ssid_index.ok())
     {
-        return {new_preferred_ssid_index.err, "WiFi connect failed"};
+        return {new_preferred_ssid_index.err, "WiFi connect failed", true};
     }
     int8_t connected_ssid_index = new_preferred_ssid_index.unwrap();
     if (connected_ssid_index != payload.wifi_preferred_ssid_index)
@@ -169,34 +168,36 @@ std::pair<Err, std::string> run_app()
     ResultOr<data_fetching::ImageHeader> const res = data_fetching::fetch_image(inky_frame, connected_ssid_index);
     if (!res.ok())
     {
-        return {res.err, "Image fetch failed"};
-    } else {
-        data_fetching::ImageHeader image_header = res.unwrap();
-        time_t update_ts = image_header.update_ts;
-        struct tm *tm_info = gmtime(&update_ts);
+        return {res.err, "Image fetch failed", true};
+    } 
+    data_fetching::ImageHeader image_header = res.unwrap();
+    time_t update_ts = image_header.update_ts;
+    struct tm *tm_info = gmtime(&update_ts);
 
-        // Convert struct tm to datetime_t
-        dt.year  = tm_info->tm_year + 1900; // tm_year is years since 1900
-        dt.month = tm_info->tm_mon + 1;     // tm_mon is 0–11
-        dt.day   = tm_info->tm_mday;        // 1–31
-        dt.dotw  = tm_info->tm_wday;        // 0 = Sunday
-        dt.hour  = tm_info->tm_hour;
-        dt.min   = tm_info->tm_min;
-        dt.sec   = tm_info->tm_sec;
-        printf("Image timestamp: %04d-%02d-%02d %02d:%02d:%02d UTC\n",
-            dt.year, dt.month, dt.day, dt.hour, dt.min, dt.sec);
-        inky_frame.rtc.set_datetime(&dt);
-        next_wakeup_hour = image_header.next_wakeup_hours;
-        next_wakeup_min = image_header.next_wakeup_minutes;
-    }
+    // Convert struct tm to datetime_t
+    dt.year  = tm_info->tm_year + 1900; // tm_year is years since 1900
+    dt.month = tm_info->tm_mon + 1;     // tm_mon is 0–11
+    dt.day   = tm_info->tm_mday;        // 1–31
+    dt.dotw  = tm_info->tm_wday;        // 0 = Sunday
+    dt.hour  = tm_info->tm_hour;
+    dt.min   = tm_info->tm_min;
+    dt.sec   = tm_info->tm_sec;
+    printf("Image timestamp: %04d-%02d-%02d %02d:%02d:%02d UTC\n",
+        dt.year, dt.month, dt.day, dt.hour, dt.min, dt.sec);
+    inky_frame.rtc.set_datetime(&dt);
+    next_wakeup_hour = image_header.next_wakeup_hours;
+    next_wakeup_min = image_header.next_wakeup_minutes;
 
-    // points of interest
-    for (const auto &poi : secrets::POINTS_OF_INTEREST_XY)
-    {
-        inky_frame.set_pen(Colours::WHITE);
-        inky_frame.circle(Point(poi[0], poi[1]), 3);
-        inky_frame.set_pen(Colours::RED);
-        inky_frame.circle(Point(poi[0], poi[1]), 2);
+    if (image_header.draw_extra) {
+
+        // points of interest
+        for (const auto &poi : secrets::POINTS_OF_INTEREST_XY)
+        {
+            inky_frame.set_pen(Colours::WHITE);
+            inky_frame.circle(Point(poi[0], poi[1]), 3);
+            inky_frame.set_pen(Colours::RED);
+            inky_frame.circle(Point(poi[0], poi[1]), 2);
+        }
     }
 
     // Initialize battery monitoring
@@ -207,9 +208,11 @@ std::pair<Err, std::string> run_app()
     const char *status = battery.get_status_string();
     printf("Battery status: %s\n", status);
     printf("%s", battery.is_usb_powered() ? "USB powered\n" : "Battery powered\n");
-    draw_battery_status(inky_frame, status);
+    if (image_header.draw_battery) {
+        draw_battery_status(inky_frame, status);
+    }
 
-    return {Err::OK, ""};
+    return {Err::OK, "", image_header.draw_battery};
 
 }
 
@@ -262,7 +265,7 @@ int main()
     InkyFrame::WakeUpEvent event = inky_frame.get_wake_up_event();
     printf("Wakup event: %d\n", event);
 
-    auto [app_err, app_msg] = run_app();
+    auto [app_err, app_msg, draw_battery] = run_app();
 
     if (app_err != Err::OK) {
         std::string error_msg = std::string(app_msg) + " (" + std::string(errToString(app_err)) + ")";
@@ -276,8 +279,9 @@ int main()
         draw_error(inky_frame, error_msg);
     } else {
     }
-
-    draw_next_wakeup(inky_frame, next_wakeup_hour, next_wakeup_min);
+    if (draw_battery) {
+        draw_next_wakeup(inky_frame, next_wakeup_hour, next_wakeup_min);
+    }
 
     if (wifi_setup::is_connected()) {
         wifi_setup::network_deinit(inky_frame);
