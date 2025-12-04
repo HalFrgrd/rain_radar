@@ -492,7 +492,7 @@ def build_image(deploy_idx: int):
 
     if deploy_idx == 2: # and next_wake.is_night:
         # image_wrapped = build_moon_image()
-        image_wrapped = build_blake_image(10)
+        image_wrapped = build_blake_image(20)
     else:
         image_wrapped = build_rain_image()
 
