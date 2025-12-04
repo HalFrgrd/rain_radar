@@ -441,11 +441,58 @@ def build_rain_image() -> ImageWrapped:
     return ImageWrapped(image=combined, add_legend=True, add_text=True, draw_extra_info=True, draw_battery_info=True)
 
 
+def build_blake_image(image_idx: int) -> ImageWrapped:
+    # load image from disk
+    blake_image_path = IMAGES_DIR / f"blake_{image_idx:02d}.jpg"
+    blake_img = Image.open(blake_image_path).convert("RGB")
+
+    # Create blurred background - zoom in and blur heavily
+    bg_img = blake_img.copy()
+    # Zoom in by cropping to center
+    bg_width, bg_height = bg_img.size
+    crop_factor = 0.5  # Use center 50% of image
+    left = int(bg_width * (1 - crop_factor) / 2)
+    top = int(bg_height * (1 - crop_factor) / 2)
+    right = int(bg_width * (1 + crop_factor) / 2)
+    bottom = int(bg_height * (1 + crop_factor) / 2)
+    bg_img = bg_img.crop((left, top, right, bottom))
+    
+    # Resize to fill entire canvas
+    bg_img = bg_img.resize((DESIRED_WIDTH, DESIRED_HEIGHT), resample=Image.LANCZOS)
+    
+    # Apply heavy blur
+    from PIL import ImageFilter
+    bg_img = bg_img.filter(ImageFilter.GaussianBlur(radius=30))
+    
+    # Resize blake_img to fit without cropping (maintain aspect ratio)
+    img_width, img_height = blake_img.size
+    img_aspect = img_width / img_height
+    desired_aspect = DESIRED_WIDTH / DESIRED_HEIGHT
+    
+    if img_aspect > desired_aspect:
+        # Image is wider - fit to width
+        new_width = DESIRED_WIDTH
+        new_height = int(new_width / img_aspect)
+    else:
+        # Image is taller - fit to height
+        new_height = DESIRED_HEIGHT
+        new_width = int(new_height * img_aspect)
+    
+    blake_img = blake_img.resize((new_width, new_height), resample=Image.LANCZOS)
+    
+    # Paste blake_img centered on background
+    x_offset = (DESIRED_WIDTH - new_width) // 2
+    y_offset = (DESIRED_HEIGHT - new_height) // 2
+    bg_img.paste(blake_img, (x_offset, y_offset))
+
+    return ImageWrapped(image=bg_img, add_legend=False, add_text=False, draw_extra_info=False, draw_battery_info=False)
+
 def build_image(deploy_idx: int):
     next_wake = get_next_wake_time()
 
-    if deploy_idx == 2 and next_wake.is_night:
-        image_wrapped = build_moon_image()
+    if deploy_idx == 2: # and next_wake.is_night:
+        # image_wrapped = build_moon_image()
+        image_wrapped = build_blake_image(10)
     else:
         image_wrapped = build_rain_image()
 
