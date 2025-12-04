@@ -297,12 +297,12 @@ def build_moon_image() -> Image:
     # Calculate position for moon image (towards left side)
     # scale moon_img to about 80% of the height of the desired image
     moon_aspect_ratio = moon_img.width / moon_img.height
-    moon_height = int(DESIRED_HEIGHT * 0.8)
+    moon_height = int(DESIRED_HEIGHT * 0.9)
     moon_width = int(moon_height * moon_aspect_ratio)
     moon_img = moon_img.resize((moon_width, moon_height), resample=Image.LANCZOS)
 
     moon_width, moon_height = moon_img.size
-    moon_x = DESIRED_WIDTH // 8  # Position towards left
+    moon_x = int(DESIRED_HEIGHT * 0.1)  # Position towards left
     moon_y = (DESIRED_HEIGHT - moon_height) // 2  # Center vertically
         
     # Paste moon image onto black background
@@ -311,10 +311,10 @@ def build_moon_image() -> Image:
     # Add red text on the right side
     draw = ImageDraw.Draw(formatted_img)
 
-    text = f"""age: {moon_data['age']:.1f} days\ndist: {int(moon_data['distance'])}km"""
-    font = ImageFont.truetype("Minecraftia-Regular.ttf", 24)
-    text_x = DESIRED_WIDTH * 2 // 3  # Right side
-    text_y = DESIRED_HEIGHT // 2    # Center vertically
+    text = f"""age:   {moon_data['age']:.1f} days\ndist:   {int(moon_data['distance']):,}km\nobscured:  {moon_data['obscuration']:.1f}%"""
+    font = ImageFont.truetype("Minecraftia-Regular.ttf", 16)
+    text_x = int(DESIRED_WIDTH * 0.68)  # Right side
+    text_y = int(DESIRED_HEIGHT * 0.45)  # Center vertically
     draw.text((text_x, text_y), text, font=font, fill=RED)
 
     return formatted_img
