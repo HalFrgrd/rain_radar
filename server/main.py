@@ -1,20 +1,23 @@
-import json
-import os
-import requests
-from pathlib import Path
-from zoneinfo import ZoneInfo
-
-from PIL import Image, ImageEnhance
-import qrcode
-
-import api_secrets 
-import datetime as dt
-import ipdb
-import argparse
 import shutil
-from PIL import ImageDraw, ImageFont
-import io
+import requests
+import qrcode
+import os
 import numpy as np
+import json
+import ipdb
+import io
+import functools as ft
+import enum
+import datetime as dt
+import argparse
+import api_secrets 
+
+from zoneinfo import ZoneInfo
+from typing import NamedTuple
+from PIL import ImageDraw, ImageFont
+from PIL import Image, ImageEnhance
+from pathlib import Path
+
 
 IMAGES_DIR = Path("images")
 IMAGES_DIR.mkdir(exist_ok=True)
@@ -61,6 +64,24 @@ INKY_FRAME_SPECTRA_PALETTE = (
     *GREEN,
 )
 
+class PicoType(enum.Enum):
+    PICO_W = 1
+    PICO2_W = 2
+
+class NextWakeTime(NamedTuple):
+    current_dt_ts: int
+    hour: int
+    minute: int
+    is_night: bool
+
+
+class ImageWrapped(NamedTuple):
+    image: Image.Image
+    add_legend: bool
+    add_text: bool
+    draw_extra_info: bool
+    draw_battery_info: bool
+
 
 def get_snapshot_timestamp():
     response = requests.get(
@@ -90,7 +111,7 @@ def lerp_color(color1: tuple, color2: tuple, t: float) -> tuple:
     return tuple(int(c1 + (c2 - c1) * t) for c1, c2 in zip(color1, color2))
 
 
-import functools as ft
+
 
 @ft.lru_cache(maxsize=None)
 def intensity_to_color(intensity: int) -> tuple:
@@ -260,7 +281,7 @@ def download_range_of_tiles(zoom, tile_start_x, tile_start_y, tile_end_x, tile_e
     print("Combined map and precipitation tiles into single images.")
 
 
-def build_moon_image() -> Image:
+def build_moon_image() -> ImageWrapped:
     # https://svs.gsfc.nasa.gov/help/#apis-dialamoon
     # ipdb.set_trace()
 
@@ -317,17 +338,10 @@ def build_moon_image() -> Image:
     text_y = int(DESIRED_HEIGHT * 0.45)  # Center vertically
     draw.text((text_x, text_y), text, font=font, fill=RED)
 
-    return formatted_img
+    return ImageWrapped(formatted_img, add_legend=False, add_text=False, draw_extra_info=False, draw_battery_info=True)
 
 
-def build_image(deploy_idx: int):
-
-    if deploy_idx == 2:
-        moon = build_moon_image()
-        convert_to_bitmap(moon, "pico_w", add_legend=False, add_text=False, draw_extra_info=False, draw_battery_info=True)
-        convert_to_bitmap(moon, "pico2_w", add_legend=False, add_text=False, draw_extra_info=False, draw_battery_info=True)
-        return
-
+def build_rain_image() -> ImageWrapped:
 
     # precip_ts = get_snapshot_timestamp()
     current_time = dt.datetime.now(tz=ZoneInfo("UTC"))
@@ -424,29 +438,48 @@ def build_image(deploy_idx: int):
         (DESIRED_WIDTH, DESIRED_HEIGHT), resample=Image.BILINEAR
     )
 
-    convert_to_bitmap(combined, "pico_w", add_legend=True, add_text=True, draw_extra_info=True, draw_battery_info=True)
-    convert_to_bitmap(combined, "pico2_w", add_legend=True, add_text=True, draw_extra_info=True, draw_battery_info=True)
+    return ImageWrapped(image=combined, add_legend=True, add_text=True, draw_extra_info=True, draw_battery_info=True)
 
-def get_next_wake_time(current_dt) -> tuple[int, int]:
+
+def build_image(deploy_idx: int):
+    next_wake = get_next_wake_time()
+
+    if deploy_idx == 2 and next_wake.is_night:
+        image_wrapped = build_moon_image()
+    else:
+        image_wrapped = build_rain_image()
+
+    for p in [PicoType.PICO_W, PicoType.PICO2_W]:
+        convert_to_bitmap(image_wrapped, pico_variant=p, next_wake=next_wake)
+
+def get_next_wake_time() -> NextWakeTime:
     # wake up at the next 10 minute interval after current_snapshot_time + 21 minutes
 
+    current_dt = dt.datetime.now()
+    current_dt_ts = int(current_dt.timestamp())
+
     if current_dt.hour >= 21 or current_dt.hour < 7:
-        return 7, 0  # 7:00 AM
+        return NextWakeTime(current_dt_ts, 7, 0, True)  # 7:00 AM
 
     if 7 <= current_dt.hour < 10 or 16 <= current_dt.hour < 20:
-        return -1, (current_dt.minute + 20) // 10 * 10 % 60
-    
-    return -1, (current_dt.minute + 40) // 10 * 10 % 60
+        return NextWakeTime(current_dt_ts, -1, (current_dt.minute + 20) // 10 * 10 % 60, False)
+
+    return NextWakeTime(current_dt_ts, -1, (current_dt.minute + 40) // 10 * 10 % 60, False)
 
 
-def convert_to_bitmap(img, pico_variant: str, *, add_legend: bool, add_text: bool, draw_extra_info: bool, draw_battery_info: bool):
+def convert_to_bitmap(img_wrapped: ImageWrapped, pico_variant: PicoType, next_wake: NextWakeTime):
+    img = img_wrapped.image
+    add_legend = img_wrapped.add_legend
+    add_text = img_wrapped.add_text
+    draw_extra_info = img_wrapped.draw_extra_info
+    draw_battery_info = img_wrapped.draw_battery_info
 
     # Convert the image to the appropriate format for the specified Pico variant
-    if pico_variant == "pico_w":
+    if pico_variant == PicoType.PICO_W:
         palette = INKY_FRAME_PALETTE
         quantized_png_file = QUANTIZED_PNG_FILE
         quantized_bin_file = QUANTIZED_BIN_FILE
-    elif pico_variant == "pico2_w":
+    elif pico_variant == PicoType.PICO2_W:
         palette = INKY_FRAME_SPECTRA_PALETTE
         quantized_png_file = QUANTIZED_PICO2W_PNG_FILE
         quantized_bin_file = QUANTIZED_PICO2W_BIN_FILE
@@ -470,7 +503,6 @@ def convert_to_bitmap(img, pico_variant: str, *, add_legend: bool, add_text: boo
             if color[3] != 0:
                 for y in range(int(legend_height)):
                     img.putpixel((int(legend_start_x + i), int(legend_start_y + y)), color)
-
 
 
     # Open the source image and quantize it to our palette
@@ -529,24 +561,17 @@ def convert_to_bitmap(img, pico_variant: str, *, add_legend: bool, add_text: boo
     # it is just an array of bytes, one byte per pixel, each byte is the color index.
 
     framebuffer = bytearray(DESIRED_WIDTH * DESIRED_HEIGHT)
-    counter = 0
-    for y in range(DESIRED_HEIGHT):
-        for x in range(DESIRED_WIDTH):
-            c = quantized_img.getpixel((x, y))
-            framebuffer[counter] = c
-            counter += 1
+    # Convert quantized image to bytes directly
+    framebuffer[:] = quantized_img.tobytes()
 
     header = bytearray(32)
     header[:4] = "BZRR".encode("ascii")  # magic number boz rain radar
     header[4:5] = (1).to_bytes(1, "little")  # version
 
-    current_dt = dt.datetime.now()
-    current_dt_ts = int(current_dt.timestamp())
 
-    header[6:14] = current_dt_ts.to_bytes(8, "little")
-    (next_wake_up_time_hour_, next_wake_up_time_minute_) = get_next_wake_time(current_dt)
-    header[14:15] = (next_wake_up_time_hour_).to_bytes(1, "little", signed=True)
-    header[15:16] = (next_wake_up_time_minute_).to_bytes(1, "little", signed=True)
+    header[6:14] = (next_wake.current_dt_ts).to_bytes(8, "little")
+    header[14:15] = (next_wake.hour).to_bytes(1, "little", signed=True)
+    header[15:16] = (next_wake.minute).to_bytes(1, "little", signed=True)
 
     header[16] = bool(draw_extra_info) # draw extra info
     header[17] = bool(draw_battery_info) # draw battery info
