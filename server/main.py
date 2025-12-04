@@ -1,3 +1,4 @@
+import json
 import os
 import requests
 from pathlib import Path
@@ -258,7 +259,76 @@ def download_range_of_tiles(zoom, tile_start_x, tile_start_y, tile_end_x, tile_e
     combined_precip_forecast.save(PRECIP_FORECAST_TILE_FILE)
     print("Combined map and precipitation tiles into single images.")
 
-def build_image():
+
+def build_moon_image() -> Image:
+    # https://svs.gsfc.nasa.gov/help/#apis-dialamoon
+    # ipdb.set_trace()
+
+    # TODO retry if failed
+
+    date = dt.datetime.now().strftime("%Y-%m-%d")
+
+    moon_img_path = IMAGES_DIR / f"moon_{date}.png"
+    moon_data_path = IMAGES_DIR / f"moon_data_{date}.json"
+    if not moon_img_path.exists() or not moon_data_path.exists():
+        # Download moon image and data
+        url = f"https://svs.gsfc.nasa.gov/api/dialamoon/{date}T00:00"
+        print(f"Downloading moon data from {url}...")
+
+        response = requests.get(url, allow_redirects=True, timeout=10)
+        response.raise_for_status()
+        moon_data = response.json()
+        moon_data_path.write_text(json.dumps(moon_data, indent=2))
+
+        moon_img_url = moon_data["image"]["url"]
+
+        response = requests.get(moon_img_url, stream=True, timeout=10)
+        response.raise_for_status()
+        moon_img = Image.open(io.BytesIO(response.content)).convert("RGBA")
+        moon_img.save(moon_img_path)
+    else:
+        print("Using cached moon image and data.")
+        moon_img = Image.open(moon_img_path).convert("RGBA")
+        moon_data = json.loads(moon_data_path.read_text())
+
+    # Create a black background image
+    formatted_img = Image.new("RGB", (DESIRED_WIDTH, DESIRED_HEIGHT), color=BLACK)
+        
+    # Calculate position for moon image (towards left side)
+    # scale moon_img to about 80% of the height of the desired image
+    moon_aspect_ratio = moon_img.width / moon_img.height
+    moon_height = int(DESIRED_HEIGHT * 0.8)
+    moon_width = int(moon_height * moon_aspect_ratio)
+    moon_img = moon_img.resize((moon_width, moon_height), resample=Image.LANCZOS)
+
+    moon_width, moon_height = moon_img.size
+    moon_x = DESIRED_WIDTH // 8  # Position towards left
+    moon_y = (DESIRED_HEIGHT - moon_height) // 2  # Center vertically
+        
+    # Paste moon image onto black background
+    formatted_img.paste(moon_img, (moon_x, moon_y), moon_img if moon_img.mode == 'RGBA' else None)
+        
+    # Add red text on the right side
+    draw = ImageDraw.Draw(formatted_img)
+
+    text = f"""age: {moon_data['age']:.1f} days\ndist: {int(moon_data['distance'])}km"""
+    font = ImageFont.truetype("Minecraftia-Regular.ttf", 24)
+    text_x = DESIRED_WIDTH * 2 // 3  # Right side
+    text_y = DESIRED_HEIGHT // 2    # Center vertically
+    draw.text((text_x, text_y), text, font=font, fill=RED)
+
+    return formatted_img
+
+
+def build_image(deploy_idx: int):
+
+    if deploy_idx == 2:
+        moon = build_moon_image()
+        convert_to_bitmap(moon, "pico_w", add_legend=False, add_text=False, draw_extra_info=False, draw_battery_info=True)
+        convert_to_bitmap(moon, "pico2_w", add_legend=False, add_text=False, draw_extra_info=False, draw_battery_info=True)
+        return
+
+
     # precip_ts = get_snapshot_timestamp()
     current_time = dt.datetime.now(tz=ZoneInfo("UTC"))
     snapshot_utc_ts = current_time - dt.timedelta(minutes=8)
@@ -354,8 +424,8 @@ def build_image():
         (DESIRED_WIDTH, DESIRED_HEIGHT), resample=Image.BILINEAR
     )
 
-    convert_to_bitmap(combined, "pico_w")
-    convert_to_bitmap(combined, "pico2_w")
+    convert_to_bitmap(combined, "pico_w", add_legend=True, add_text=True, draw_extra_info=True, draw_battery_info=True)
+    convert_to_bitmap(combined, "pico2_w", add_legend=True, add_text=True, draw_extra_info=True, draw_battery_info=True)
 
 def get_next_wake_time(current_dt) -> tuple[int, int]:
     # wake up at the next 10 minute interval after current_snapshot_time + 21 minutes
@@ -369,7 +439,7 @@ def get_next_wake_time(current_dt) -> tuple[int, int]:
     return -1, (current_dt.minute + 40) // 10 * 10 % 60
 
 
-def convert_to_bitmap(img, pico_variant: str):
+def convert_to_bitmap(img, pico_variant: str, *, add_legend: bool, add_text: bool, draw_extra_info: bool, draw_battery_info: bool):
 
     # Convert the image to the appropriate format for the specified Pico variant
     if pico_variant == "pico_w":
@@ -389,7 +459,7 @@ def convert_to_bitmap(img, pico_variant: str):
     pal_img.putpalette(palette, rawmode="RGB")
 
     # draw a bar in the bottom right showing the colour intesity legend using intensity_to_color
-    if add_legend := True:
+    if add_legend:
         legend_width = 400
         legend_start_x = DESIRED_WIDTH - legend_width - 3
         legend_height = 16
@@ -411,7 +481,7 @@ def convert_to_bitmap(img, pico_variant: str):
     if add_qr_code := False:
         combined.paste(qr_img, (1, 52)) # near the top left corner
 
-    if add_text := True:
+    if add_text:
         TEXT_HEIGHT = 16
         with open(IMAGE_INFO_FILE, "r") as f:
             lines = f.readlines()
@@ -466,9 +536,8 @@ def convert_to_bitmap(img, pico_variant: str):
             framebuffer[counter] = c
             counter += 1
 
-    # ipdb.set_trace()
     header = bytearray(32)
-    header[:4] = "BZRR".encode("ascii")  # magic number
+    header[:4] = "BZRR".encode("ascii")  # magic number boz rain radar
     header[4:5] = (1).to_bytes(1, "little")  # version
 
     current_dt = dt.datetime.now()
@@ -479,8 +548,8 @@ def convert_to_bitmap(img, pico_variant: str):
     header[14:15] = (next_wake_up_time_hour_).to_bytes(1, "little", signed=True)
     header[15:16] = (next_wake_up_time_minute_).to_bytes(1, "little", signed=True)
 
-    header[16] = True # draw extra info
-    header[17] = True # draw battery info
+    header[16] = bool(draw_extra_info) # draw extra info
+    header[17] = bool(draw_battery_info) # draw battery info
 
     payload = header + framebuffer
 
@@ -502,13 +571,10 @@ if __name__ == "__main__":
                 print(f"Deleting old precipitation file: {file}")
                 file.unlink()
 
-    build_image()
-    if args.deploy:
-        for i in range(10):
-            if i == 10:
-                deploy_dir = Path(f"publicly_available")
-            else:
-                deploy_dir = Path(f"publicly_available/{i}")
+    for i in range(10):
+        build_image(i)
+        if args.deploy:
+            deploy_dir = Path(f"publicly_available/{i}")
             deploy_dir.mkdir(exist_ok=True)
             shutil.copy(QUANTIZED_PNG_FILE, deploy_dir / QUANTIZED_PNG_FILE.name)
             shutil.copy(QUANTIZED_PICO2W_PNG_FILE, deploy_dir / QUANTIZED_PICO2W_PNG_FILE.name)
