@@ -17,7 +17,8 @@ from typing import NamedTuple
 from PIL import ImageDraw, ImageFont
 from PIL import Image, ImageEnhance
 from pathlib import Path
-
+from PIL import ImageFilter
+import math
 
 IMAGES_DIR = Path("images")
 IMAGES_DIR.mkdir(exist_ok=True)
@@ -281,6 +282,32 @@ def download_range_of_tiles(zoom, tile_start_x, tile_start_y, tile_end_x, tile_e
     print("Combined map and precipitation tiles into single images.")
 
 
+def draw_star(draw: ImageDraw.Draw, x: int, y: int, size: int):
+    # draw.ellipse(
+    #     (x, y, x + size, y + size),
+    #     fill=WHITE,
+    # )
+    # Draw an 8-pointed star (octagram) with alternating long and short points
+    
+    center_x = x + size / 2
+    center_y = y + size / 2
+    outer_radius = size / 2
+    inner_radius = size / 6  # Make it skinny by using a small inner radius
+    
+    points = []
+    for i in range(16):  # 16 points for 8-pointed star (8 outer + 8 inner)
+        angle = i * math.pi / 8  # 22.5 degrees per step
+        if i % 2 == 0:  # Outer points
+            radius = outer_radius
+        else:  # Inner points
+            radius = inner_radius
+        
+        point_x = center_x + radius * math.cos(angle - math.pi / 2)  # Start from top
+        point_y = center_y + radius * math.sin(angle - math.pi / 2)
+        points.append((point_x, point_y))
+    
+    draw.polygon(points, fill=WHITE)
+
 def build_moon_image() -> ImageWrapped:
     # https://svs.gsfc.nasa.gov/help/#apis-dialamoon
     # ipdb.set_trace()
@@ -314,7 +341,7 @@ def build_moon_image() -> ImageWrapped:
 
     # Create a black background image
     formatted_img = Image.new("RGB", (DESIRED_WIDTH, DESIRED_HEIGHT), color=BLACK)
-        
+
     # Calculate position for moon image (towards left side)
     # scale moon_img to about 80% of the height of the desired image
     moon_aspect_ratio = moon_img.width / moon_img.height
@@ -323,11 +350,83 @@ def build_moon_image() -> ImageWrapped:
     moon_img = moon_img.resize((moon_width, moon_height), resample=Image.LANCZOS)
 
     moon_width, moon_height = moon_img.size
-    moon_x = int(DESIRED_HEIGHT * 0.1)  # Position towards left
-    moon_y = (DESIRED_HEIGHT - moon_height) // 2  # Center vertically
+    moon_upper_left_x = int(DESIRED_HEIGHT * 0.1)  # Position towards left
+    moon_upper_left_y = (DESIRED_HEIGHT - moon_height) // 2  # Center vertically
+    moon_center_x = moon_upper_left_x + moon_width // 2
+    moon_center_y = moon_upper_left_y + moon_height // 2
         
     # Paste moon image onto black background
-    formatted_img.paste(moon_img, (moon_x, moon_y), moon_img if moon_img.mode == 'RGBA' else None)
+    formatted_img.paste(moon_img, (moon_upper_left_x, moon_upper_left_y), moon_img if moon_img.mode == 'RGBA' else None)
+
+    draw = ImageDraw.Draw(formatted_img)
+    for (star_x, star_y, size) in [
+        (112, 69, 11),
+        (123, 278, 8),
+        (134, 301, 4),
+        (131, 418, 4),
+        (145, 369, 11),
+        (156, 336, 6),
+        (156, 47, 10),
+        (167, 392, 12),
+        (198, 214, 7),
+        (201, 336, 9),
+        (23, 278, 9),
+        (234, 125, 6),
+        (234, 158, 4),
+        (267, 347, 4),
+        (278, 103, 5),
+        (278, 436, 8),
+        (289, 169, 8),
+        (31, 85, 8),
+        (312, 69, 8),
+        (345, 136, 7),
+        (345, 278, 5),
+        (347, 103, 8),
+        (356, 425, 7),
+        (367, 125, 7),
+        (389, 436, 11),
+        (423, 69, 5),
+        (445, 392, 6),
+        (45, 158, 5),
+        (45, 214, 6),
+        (456, 303, 10),
+        (456, 347, 12),
+        (467, 178, 6),
+        (512, 258, 4),
+        (512, 425, 8),
+        (523, 169, 6),
+        (534, 247, 5),
+        (534, 47, 4),
+        (567, 436, 7),
+        (567, 69, 5),
+        (589, 203, 11),
+        (598, 392, 4),
+        (612, 69, 6),
+        (634, 158, 10),
+        (634, 314, 4),
+        (645, 200, 9),
+        (678, 103, 8),
+        (678, 369, 9),
+        (689, 103, 7),
+        (689, 347, 9),
+        (712, 125, 7),
+        (712, 158, 5),
+        (723, 214, 10),
+        (723, 314, 4),
+        (723, 425, 9),
+        (734, 247, 8),
+        (752, 38, 8),
+        (774, 187, 8),
+        (78, 214, 12),
+        (89, 247, 9),
+        (89, 301, 5),
+        (89, 392, 10),
+        (89, 425, 10),
+    ]:
+        
+        if ((star_x - moon_center_x) ** 2 + (star_y - moon_center_y) ** 2) ** 0.5 < moon_width*0.84 // 2 + size:
+            continue
+        draw_star(draw, star_x, star_y, size)
         
     # Add red text on the right side
     draw = ImageDraw.Draw(formatted_img)
@@ -460,8 +559,7 @@ def build_blake_image(image_idx: int) -> ImageWrapped:
     # Resize to fill entire canvas
     bg_img = bg_img.resize((DESIRED_WIDTH, DESIRED_HEIGHT), resample=Image.LANCZOS)
     
-    # Apply heavy blur
-    from PIL import ImageFilter
+
     bg_img = bg_img.filter(ImageFilter.GaussianBlur(radius=30))
     
     # Resize blake_img to fit without cropping (maintain aspect ratio)
@@ -491,8 +589,8 @@ def build_image(deploy_idx: int):
     next_wake = get_next_wake_time()
 
     if deploy_idx == 2: # and next_wake.is_night:
-        # image_wrapped = build_moon_image()
-        image_wrapped = build_blake_image(20)
+        image_wrapped = build_moon_image()
+        # image_wrapped = build_blake_image(20)
     else:
         image_wrapped = build_rain_image()
 
