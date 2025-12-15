@@ -323,14 +323,15 @@ def build_moon_image() -> ImageWrapped:
         url = f"https://svs.gsfc.nasa.gov/api/dialamoon/{date}T00:00"
         print(f"Downloading moon data from {url}...")
 
-        response = requests.get(url, allow_redirects=True, timeout=10)
+        response = requests.get(url, allow_redirects=True, timeout=60)
         response.raise_for_status()
         moon_data = response.json()
         moon_data_path.write_text(json.dumps(moon_data, indent=2))
 
         moon_img_url = moon_data["image"]["url"]
 
-        response = requests.get(moon_img_url, stream=True, timeout=10)
+        # the server can be quite slow sometimes
+        response = requests.get(moon_img_url, stream=True, timeout=60)
         response.raise_for_status()
         moon_img = Image.open(io.BytesIO(response.content)).convert("RGBA")
         moon_img.save(moon_img_path)
@@ -438,6 +439,37 @@ def build_moon_image() -> ImageWrapped:
     draw.text((text_x, text_y), text, font=font, fill=RED)
 
     return ImageWrapped(formatted_img, add_legend=False, add_text=False, draw_extra_info=False, draw_battery_info=True)
+
+
+def build_greetings_image() -> ImageWrapped:
+    formatted_img = Image.new("RGB", (DESIRED_WIDTH, DESIRED_HEIGHT), color=WHITE)
+
+    draw = ImageDraw.Draw(formatted_img)
+
+    font = ImageFont.truetype("Minecraftia-Regular.ttf", 48)
+    text = "Congratulations!"
+    text_width = int(draw.textlength(text, font=font))
+    draw.text(((DESIRED_WIDTH - text_width) // 2, 100), text, font=font, fill=BLACK)
+
+    party_popper = Image.open("party_popper.png").convert("RGBA")
+    party_popper = party_popper.resize((100, 100), resample=Image.LANCZOS)
+    formatted_img.paste(party_popper, ((DESIRED_WIDTH - text_width) // 2 - party_popper.size[0] - 10, 80), party_popper)
+    formatted_img.paste(party_popper, ((DESIRED_WIDTH + text_width) // 2 + 5, 80), party_popper)
+
+    font = ImageFont.truetype("Minecraftia-Regular.ttf", 32)
+    text = f"You've won a subscription to {api_secrets.GREETINGS_PAGE_NAME}TV!"
+    text_width = int(draw.textlength(text, font=font))
+    draw.text(((DESIRED_WIDTH - text_width) // 2, 240), text, font=font, fill=BLACK)
+
+    text = f"Tune in regularly to see"
+    text_width = int(draw.textlength(text, font=font))
+    draw.text(((DESIRED_WIDTH - text_width) // 2, 280), text, font=font, fill=BLACK)
+
+    text = f"all things {api_secrets.GREETINGS_PAGE_NAME}!"
+    text_width = int(draw.textlength(text, font=font))
+    draw.text(((DESIRED_WIDTH - text_width) // 2, 320), text, font=font, fill=BLACK)
+
+    return ImageWrapped(formatted_img, add_legend=False, add_text=False, draw_extra_info=False, draw_battery_info=False)
 
 
 def build_rain_image() -> ImageWrapped:
@@ -589,7 +621,8 @@ def build_image(deploy_idx: int):
     next_wake = get_next_wake_time()
 
     if deploy_idx == 2: # and next_wake.is_night:
-        image_wrapped = build_moon_image()
+        # image_wrapped = build_moon_image()
+        image_wrapped = build_greetings_image()
         # image_wrapped = build_blake_image(20)
     else:
         image_wrapped = build_rain_image()
