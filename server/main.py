@@ -620,7 +620,7 @@ def build_blake_image(image_idx: int) -> ImageWrapped:
 def build_image(deploy_idx: int):
     next_wake = get_next_wake_time()
 
-    if deploy_idx == 2: # and next_wake.is_night:
+    if deploy_idx == 4: # and next_wake.is_night:
         # image_wrapped = build_moon_image()
         image_wrapped = build_greetings_image()
         # image_wrapped = build_blake_image(20)
