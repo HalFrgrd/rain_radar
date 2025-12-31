@@ -2,23 +2,27 @@
 - Install `uv`
 - run with `uv run python main.py --deploy`
 
-### building the image
+## Building the rain radar image
 
-https://tile.openstreetmap.org/9/255/170.png
-
+### Rain data:
 https://doc.rainbow.ai/api-ref/tiles/
 
 See API usage:
 https://developer.rainbow.ai/reports
 
-I've found `prettymaps` to be quite slow.
-maptiler.com is much beter and easier to use for this use case.
-maptiler workflow: create new map from some preset, I think i made a tile preset that pops up in your maps.
-The online modification works pretty well.
+### Background map image
+I started out `prettymaps` but found it too slow.
+`maptiler.com` is much beter and easier to use for this use case.
+maptiler workflow: create new map from some preset, I think I made a tile preset that pops up in your maps.
+The web based map creation / style modification works pretty well.
+I bought a one month subscription so I could use the API to download map tiles.
 
 
-### hosting data
-Using tailscale funnel
+## Hosting image server
+I'm using tailscale funnel.
+I point it to the `public_available/` folder and it simply hosts that folder on a publicly available web server.
+Each wifi network index gets its own subfolder allowing different images per wifi network.
+There is a cronjob to run `uv` every 10 minutes.
 
-### other images
+## other images
 https://www.singletonmills.com/sydney-first-sheep.html

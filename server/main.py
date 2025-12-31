@@ -282,16 +282,12 @@ def download_range_of_tiles(zoom, tile_start_x, tile_start_y, tile_end_x, tile_e
     print("Combined map and precipitation tiles into single images.")
 
 
-def draw_star(draw: ImageDraw.Draw, x: int, y: int, size: int):
-    # draw.ellipse(
-    #     (x, y, x + size, y + size),
-    #     fill=WHITE,
-    # )
+def draw_star(draw: ImageDraw.Draw, x: int, y: int, size: int, outer_radius: int = None, colour=WHITE):
     # Draw an 8-pointed star (octagram) with alternating long and short points
     
     center_x = x + size / 2
     center_y = y + size / 2
-    outer_radius = size / 2
+    outer_radius = size / 2 if outer_radius is None else outer_radius
     inner_radius = size / 6  # Make it skinny by using a small inner radius
     
     points = []
@@ -306,9 +302,69 @@ def draw_star(draw: ImageDraw.Draw, x: int, y: int, size: int):
         point_y = center_y + radius * math.sin(angle - math.pi / 2)
         points.append((point_x, point_y))
     
-    draw.polygon(points, fill=WHITE)
+    draw.polygon(points, fill=colour)
 
-def build_moon_image() -> ImageWrapped:
+def draw_shooting_star(draw: ImageDraw.Draw, x: int, y: int, red_tail: bool = False):
+    w = 60
+    h = 20
+    end_angle = 267
+
+    main_colour = WHITE
+    grey = (128, 128, 128)
+    small_tail_colour = grey
+
+    draw.arc(
+        (x-w, y , x + w, y + h),
+        start=210,
+        end=230,
+        fill=small_tail_colour,
+        width=1
+    )
+    draw.arc(
+        (x - w, y , x + w, y + h),
+        start=230,
+        end=255,
+        fill=small_tail_colour,
+        width=2
+    )
+    draw.arc(
+        (x- w, y , x + w, y + h),
+        start=255,
+        end=end_angle,
+        fill=main_colour,
+        width=2
+    )
+    if red_tail:
+        draw.point((x - w*0.86, y + h * 0.25), fill=RED)
+        draw.point((x - w*0.80, y + h * 0.22), fill=RED)
+        draw.point((x - w*0.74, y + h * 0.20), fill=RED)
+        draw.point((x - w*0.68, y + h * 0.18), fill=RED)
+        # draw.point((x - w*0.62, y + h * 0.16), fill=RED) 
+        # draw.point((x - w*0.56, y + h * 0.15), fill=RED)
+        # draw.point((x - w*0.50, y + h * 0.14), fill=RED)
+        # draw.point((x - w*0.44, y + h * 0.13), fill=RED)
+
+    
+    draw.arc(
+        (x - w + 10, y +2 , x + w - 10, y + h),
+        start=215,
+        end=end_angle,
+        fill=grey,
+        width=1
+    )
+    draw.arc(
+        (x - w + 20, y -1 , x + w - 20, y + int(h*0.2)),
+        start=190,
+        end=end_angle,
+        fill=grey,
+        width=1
+    )
+    # Draw the star head
+    star_size = 14
+    draw_star(draw, x - star_size //2    , y - star_size//2 + 1, star_size, outer_radius=star_size//5, colour = main_colour)
+    draw_star(draw, x - star_size //2 - 1, y - star_size//2 + 1, star_size, outer_radius=star_size//5, colour = main_colour)
+
+def build_moon_image(draw_second_shooting_star:bool) -> ImageWrapped:
     # https://svs.gsfc.nasa.gov/help/#apis-dialamoon
     # ipdb.set_trace()
 
@@ -379,7 +435,7 @@ def build_moon_image() -> ImageWrapped:
         (278, 436, 8),
         (289, 169, 8),
         (31, 85, 8),
-        (312, 69, 8),
+        (312, 20, 8),
         (345, 136, 7),
         (345, 278, 5),
         (347, 103, 8),
@@ -393,23 +449,26 @@ def build_moon_image() -> ImageWrapped:
         (456, 303, 10),
         (456, 347, 12),
         (467, 178, 6),
+        (500, 120, 9),
         (512, 258, 4),
         (512, 425, 8),
         (523, 169, 6),
         (534, 247, 5),
         (534, 47, 4),
+        (560, 140, 4),
         (567, 436, 7),
         (567, 69, 5),
         (589, 203, 11),
         (598, 392, 4),
         (612, 69, 6),
         (634, 158, 10),
-        (634, 314, 4),
+        (634, 350, 4),
         (645, 200, 9),
         (678, 103, 8),
         (678, 369, 9),
-        (689, 103, 7),
+        # (689, 103, 7),
         (689, 347, 9),
+        (700, 25, 6),
         (712, 125, 7),
         (712, 158, 5),
         (723, 214, 10),
@@ -428,11 +487,34 @@ def build_moon_image() -> ImageWrapped:
         if ((star_x - moon_center_x) ** 2 + (star_y - moon_center_y) ** 2) ** 0.5 < moon_width*0.84 // 2 + size:
             continue
         draw_star(draw, star_x, star_y, size)
+
+    draw_shooting_star(draw, 530, 380, red_tail=True)
+    if draw_second_shooting_star:
+        draw_shooting_star(draw, 533, 400, red_tail=False)
+
         
     # Add red text on the right side
     draw = ImageDraw.Draw(formatted_img)
 
-    text = f"""age:   {moon_data['age']:.1f} days\ndist:   {int(moon_data['distance']):,}km\nobscured:  {moon_data['obscuration']:.1f}%"""
+    age = moon_data['age']
+    distance = moon_data['distance']
+    obscuration = moon_data['obscuration']
+
+    phase_names = [
+        "New Moon",
+        "Waxing Crescent",
+        "First Quarter",
+        "Waxing Gibbous",
+        "Full Moon",
+        "Waning Gibbous",
+        "Last Quarter",
+        "Waning Crescent",
+    ]
+    age_max = 29.53
+    phase_name = phase_names[int((age / age_max) * len(phase_names)) % len(phase_names)]
+    
+
+    text = f"""{phase_name}\nage:   {age:.1f} days\ndist:   {int(distance):,}km\nobscured:  {obscuration:.1f}%"""
     font = ImageFont.truetype("Minecraftia-Regular.ttf", 16)
     text_x = int(DESIRED_WIDTH * 0.68)  # Right side
     text_y = int(DESIRED_HEIGHT * 0.45)  # Center vertically
@@ -571,14 +653,11 @@ def build_rain_image() -> ImageWrapped:
 
     return ImageWrapped(image=combined, add_legend=True, add_text=True, draw_extra_info=True, draw_battery_info=True)
 
-
-def build_blake_image(image_idx: int) -> ImageWrapped:
-    # load image from disk
-    blake_image_path = IMAGES_DIR / f"blake_{image_idx:02d}.jpg"
-    blake_img = Image.open(blake_image_path).convert("RGB")
+def build_from_path(image_filename: str) -> ImageWrapped:
+    original_image = Image.open(image_filename).convert("RGB")
 
     # Create blurred background - zoom in and blur heavily
-    bg_img = blake_img.copy()
+    bg_img = original_image.copy()
     # Zoom in by cropping to center
     bg_width, bg_height = bg_img.size
     crop_factor = 0.5  # Use center 50% of image
@@ -595,7 +674,7 @@ def build_blake_image(image_idx: int) -> ImageWrapped:
     bg_img = bg_img.filter(ImageFilter.GaussianBlur(radius=30))
     
     # Resize blake_img to fit without cropping (maintain aspect ratio)
-    img_width, img_height = blake_img.size
+    img_width, img_height = original_image.size
     img_aspect = img_width / img_height
     desired_aspect = DESIRED_WIDTH / DESIRED_HEIGHT
     
@@ -608,29 +687,74 @@ def build_blake_image(image_idx: int) -> ImageWrapped:
         new_height = DESIRED_HEIGHT
         new_width = int(new_height * img_aspect)
     
-    blake_img = blake_img.resize((new_width, new_height), resample=Image.LANCZOS)
+    original_image = original_image.resize((new_width, new_height), resample=Image.LANCZOS)
     
     # Paste blake_img centered on background
     x_offset = (DESIRED_WIDTH - new_width) // 2
     y_offset = (DESIRED_HEIGHT - new_height) // 2
-    bg_img.paste(blake_img, (x_offset, y_offset))
+    bg_img.paste(original_image, (x_offset, y_offset))
 
     return ImageWrapped(image=bg_img, add_legend=False, add_text=False, draw_extra_info=False, draw_battery_info=False)
 
 def build_image(deploy_idx: int):
-    next_wake = get_next_wake_time()
+    current_dt = dt.datetime.now()
+    current_hour = current_dt.hour
+    
+    if deploy_idx == 9:
+        image_wrapped = build_from_path("local_images/blake_new_years.jpg")
+        next_wake = get_next_wake_time()
+    elif current_hour >= 20 or current_hour < 6:
+        image_wrapped = build_moon_image(True if deploy_idx == 4 else False)
+        next_wake = get_next_wake_time()
+    elif deploy_idx == 4:
+        next_wake = get_next_wake_time(short_refresh=49, long_refresh=49)
+        
+        overrides = {
+            (d := dt.date(2025, 12, 25)): lambda: build_greetings_image(),
+            (d := dt.date(2025, 12, 26)): lambda: build_from_path(IMAGES_DIR / "blake_01.jpg"),
+            (d := dt.date(2025, 12, 27)): lambda: build_from_path("local_images/holiday_01.jpeg"),
+            (d := dt.date(2025, 12, 28)): lambda: build_from_path(IMAGES_DIR / "blake_03.jpg"),
+            (d := dt.date(2025, 12, 29)): lambda: build_from_path("local_images/holiday_02.jpg"),
+            (d := dt.date(2025, 12, 30)): lambda: build_from_path("local_images/ballerinas.jpg"),
+            (d := d + dt.timedelta(days=1)): lambda: build_from_path(IMAGES_DIR / "blake_03.jpg"),
+            (d := d + dt.timedelta(days=1)): lambda: build_from_path("local_images/blake_new_years.jpg"),
+            (d := d + dt.timedelta(days=1)): lambda: build_from_path("local_images/holiday_03.jpg"),
+            (d := d + dt.timedelta(days=1)): lambda: build_from_path(IMAGES_DIR / "blake_05.jpg"),
+            (d := d + dt.timedelta(days=1)): lambda: build_from_path("local_images/holiday_04.jpg"),
+            (d := d + dt.timedelta(days=1)): lambda: build_from_path(IMAGES_DIR / "blake_06.jpg"),
+            (d := d + dt.timedelta(days=1)): lambda: build_from_path("local_images/holiday_05.jpg"),
+            (d := d + dt.timedelta(days=1)): lambda: build_from_path(IMAGES_DIR / "blake_07.jpg"),
+            (d := d + dt.timedelta(days=1)): lambda: build_from_path("local_images/holiday_06.jpg"),
+            (d := d + dt.timedelta(days=1)): lambda: build_from_path(IMAGES_DIR / "blake_08.jpg"),
+            (d := d + dt.timedelta(days=1)): lambda: build_from_path("local_images/holiday_07.jpg"),
+            (d := d + dt.timedelta(days=1)): lambda: build_from_path(IMAGES_DIR / "blake_09.jpg"),
+            (d := d + dt.timedelta(days=1)): lambda: build_from_path(IMAGES_DIR / "blake_10.jpg"),
+            (d := d + dt.timedelta(days=1)): lambda: build_from_path(IMAGES_DIR / "blake_11.jpg"),
+            (d := d + dt.timedelta(days=1)): lambda: build_from_path(IMAGES_DIR / "blake_12.jpg"),
+            (d := d + dt.timedelta(days=1)): lambda: build_from_path(IMAGES_DIR / "blake_13.jpg"),
+            (d := d + dt.timedelta(days=1)): lambda: build_from_path(IMAGES_DIR / "blake_14.jpg"),
+            (d := d + dt.timedelta(days=1)): lambda: build_from_path(IMAGES_DIR / "blake_15.jpg"),
+            (d := d + dt.timedelta(days=1)): lambda: build_from_path(IMAGES_DIR / "blake_16.jpg"),
+            (d := d + dt.timedelta(days=1)): lambda: build_from_path(IMAGES_DIR / "blake_17.jpg"),
+            (d := d + dt.timedelta(days=1)): lambda: build_from_path(IMAGES_DIR / "blake_18.jpg"),
+            (d := d + dt.timedelta(days=1)): lambda: build_from_path(IMAGES_DIR / "blake_19.jpg"),
+            (d := d + dt.timedelta(days=1)): lambda: build_from_path(IMAGES_DIR / "blake_20.jpg"),
+        }
+        for k,v in overrides.items():
+            print(f"Override available for {k}: {v}")
 
-    if deploy_idx == 4: # and next_wake.is_night:
-        # image_wrapped = build_moon_image()
-        image_wrapped = build_greetings_image()
-        # image_wrapped = build_blake_image(20)
+        if current_dt.date() in overrides:
+            image_wrapped = overrides[current_dt.date()]()
+        else:
+            image_wrapped = build_blake_image(1)
     else:
+        next_wake = get_next_wake_time()
         image_wrapped = build_rain_image()
 
     for p in [PicoType.PICO_W, PicoType.PICO2_W]:
         convert_to_bitmap(image_wrapped, pico_variant=p, next_wake=next_wake)
 
-def get_next_wake_time() -> NextWakeTime:
+def get_next_wake_time(short_refresh=20, long_refresh=40) -> NextWakeTime:
     # wake up at the next 10 minute interval after current_snapshot_time + 21 minutes
 
     current_dt = dt.datetime.now()
@@ -640,9 +764,9 @@ def get_next_wake_time() -> NextWakeTime:
         return NextWakeTime(current_dt_ts, 7, 0, True)  # 7:00 AM
 
     if 7 <= current_dt.hour < 10 or 16 <= current_dt.hour < 20:
-        return NextWakeTime(current_dt_ts, -1, (current_dt.minute + 20) // 10 * 10 % 60, False)
+        return NextWakeTime(current_dt_ts, -1, (current_dt.minute + short_refresh) // 10 * 10 % 60, False)
 
-    return NextWakeTime(current_dt_ts, -1, (current_dt.minute + 40) // 10 * 10 % 60, False)
+    return NextWakeTime(current_dt_ts, -1, (current_dt.minute + long_refresh) // 10 * 10 % 60, False)
 
 
 def convert_to_bitmap(img_wrapped: ImageWrapped, pico_variant: PicoType, next_wake: NextWakeTime):
