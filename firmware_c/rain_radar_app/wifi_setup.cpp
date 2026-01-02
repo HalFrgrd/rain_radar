@@ -94,7 +94,7 @@ namespace
 
         sleep_ms(2000); // wait a bit before checking status
 
-        uint32_t timeout_ms = 10000;
+        uint32_t timeout_ms = 20000;
         while (millis() - t_start < timeout_ms)
         {
             int link_status = cyw43_wifi_link_status(&cyw43_state, CYW43_ITF_STA);

@@ -20,18 +20,18 @@
 #endif
 #define MEM_ALIGNMENT               4
 #ifndef MEM_SIZE
-#define MEM_SIZE                    4000
+#define MEM_SIZE                    32768  // Increased for HTTPS/TLS reliability (was 4000)
 #endif
-#define MEMP_NUM_TCP_SEG            32
+#define MEMP_NUM_TCP_SEG            64     // Increased for better retransmission (was 32)
 #define MEMP_NUM_ARP_QUEUE          10
-#define PBUF_POOL_SIZE              24
+#define PBUF_POOL_SIZE              48     // Increased for buffering (was 24)
 #define LWIP_ARP                    1
 #define LWIP_ETHERNET               1
 #define LWIP_ICMP                   1
 #define LWIP_RAW                    1
 #define TCP_WND                     (8 * TCP_MSS)
 #define TCP_MSS                     1460
-#define TCP_SND_BUF                 (8 * TCP_MSS)
+#define TCP_SND_BUF                 (16 * TCP_MSS)  // Increased for better throughput (was 8 * TCP_MSS)
 #define TCP_SND_QUEUELEN            ((4 * (TCP_SND_BUF) + (TCP_MSS - 1)) / (TCP_MSS))
 #define LWIP_NETIF_STATUS_CALLBACK  1
 #define LWIP_NETIF_LINK_CALLBACK    1
@@ -92,6 +92,12 @@
    or you will get a warning "altcp_tls: TCP_WND is smaller than the RX decrypion buffer, connection RX might stall!" */
 #undef TCP_WND
 #define TCP_WND  32768
+
+// Additional reliability settings for HTTPS downloads
+#define TCP_MAXRTX                  12     // Max data retransmissions
+#define TCP_SYNMAXRTX               6      // Max SYN retransmissions
+#define MEMP_NUM_NETBUF             8      // Network buffers
+#define MEMP_NUM_NETCONN            8      // Concurrent connections
 
 #define LWIP_ALTCP               1
 #define LWIP_ALTCP_TLS           1
