@@ -34,7 +34,7 @@ QUANTIZED_PNG_FILE = QUANTIZED_BIN_FILE.with_suffix(".png")
 QUANTIZED_PICO2W_PNG_FILE = QUANTIZED_PICO2W_BIN_FILE.with_suffix(".png")
 IMAGE_INFO_FILE = IMAGES_DIR / ("image_info.txt")
 
-INTENSITY_MIN = 20
+INTENSITY_MIN = 22
 INTENSITY_MAX = 127
 
 BLACK = (0, 0, 0)
@@ -97,14 +97,19 @@ def get_tile_handler(zoom: int, x: int, y: int, snapshot_timestamp: int, forecas
     response = requests.get(url, stream=True, timeout=10)
     return response
 
-
+# https://labs.mapbox.com/what-the-tile/
 # ZOOM = 10
 # TILE_X = 511
 # TILE_Y = 340
+
+# South central / east
 ZOOM = 7
 TILE_X = 63
 TILE_Y = 42
 
+# Inverness (good for debugging):
+# TILE_X = 62
+# TILE_Y = 38
 
 
 def lerp_color(color1: tuple, color2: tuple, t: float) -> tuple:
@@ -112,25 +117,31 @@ def lerp_color(color1: tuple, color2: tuple, t: float) -> tuple:
     return tuple(int(c1 + (c2 - c1) * t) for c1, c2 in zip(color1, color2))
 
 
-
-
 @ft.lru_cache(maxsize=None)
-def intensity_to_color(intensity: int) -> tuple:
+def intensity_to_color(intensity: int, is_snow: bool) -> tuple:
     """Convert DBZ intensity (0-127) to color with linear interpolation between palette colors"""
     if intensity < INTENSITY_MIN:
         return (0, 0, 0, 0)  # Black for no precipitation
     
     # Define color stops with intensity values (0-127 range)
-    color_stops = [
-        (0, BLACK + (255,)),      # No precipitation
-        (10, GREEN + (255,)),     # Light precipitation
-        (30, BLUE + (255,)),      # Moderate precipitation
-        (50, YELLOW + (255,)),    # Heavy precipitation
-        (70, ORANGE + (255,)),    # Very heavy precipitation
-        (100, RED + (255,)),      # Extreme precipitation
-        (127, WHITE + (255,)),    # Maximum intensity
-    ]
-    
+    if is_snow:
+        # Use a greyscale ramp for snow
+        snow_min_color = 140
+        color_stops = [
+            (INTENSITY_MIN, (snow_min_color, snow_min_color, snow_min_color, 255)),
+            (INTENSITY_MAX, (255, 255, 255, 255)),
+        ]
+    else:
+        color_stops = [
+            (0, BLACK + (255,)),      # No precipitation
+            (10, GREEN + (255,)),     # Light precipitation
+            (30, BLUE + (255,)),      # Moderate precipitation
+            (50, YELLOW + (255,)),    # Heavy precipitation
+            (70, ORANGE + (255,)),    # Very heavy precipitation
+            (100, RED + (255,)),      # Extreme precipitation
+            (127, WHITE + (255,)),    # Maximum intensity
+        ]
+
     # Clamp intensity to valid range
     intensity = max(INTENSITY_MIN, min(INTENSITY_MAX, intensity))
     
@@ -153,8 +164,6 @@ def intensity_to_color(intensity: int) -> tuple:
 
 
 def process_dbz_u8(img: Image) -> Image:
-    """Process dbz_u8 image: set pixel to pure white if red component & 128 == 128"""
-    # Convert to RGBA to ensure we can work with individual color channels
     img = img.convert("RGBA")
     
     # Get pixel data as a list
@@ -171,11 +180,11 @@ def process_dbz_u8(img: Image) -> Image:
             processed_pixels.append((0, 0, 0, 0))  # Keep fully transparent pixels as is
             continue
         if r & 128 == 128:  # Check if bit 7 (128) is set in red component, it is snow
-            processed_pixels.append((255, 255, 255, a))
+            value_with_snow_mask = r & 127
+            processed_pixels.append(intensity_to_color(value_with_snow_mask, is_snow=True))
         else:
-            # this is the interesting part, we can transform dbz to our colour palette
-            processed_pixels.append(intensity_to_color(r))  # Use palette color with original alpha
-    
+            processed_pixels.append(intensity_to_color(r, is_snow=False)) 
+        
     # Create new image with processed pixels
     processed_img = Image.new("RGBA", img.size)
     processed_img.putdata(processed_pixels)
@@ -183,35 +192,44 @@ def process_dbz_u8(img: Image) -> Image:
     return processed_img
 
 def download_precip_image(zoom, tile_x, tile_y, ts, forecast_secs):
-    file_path = IMAGES_DIR / f"precip_{zoom}_{tile_x}_{tile_y}_{ts}_{forecast_secs}_dbz_u8.png"
-    if not file_path.exists(): # or True:
+    raw_data_file_path = IMAGES_DIR / f"precip_{zoom}_{tile_x}_{tile_y}_{ts}_{forecast_secs}_dbz_u8.raw"
+    
+    USE_CACHE = False
+    if not raw_data_file_path.exists() or not USE_CACHE:
         print("Downloading forecast image...")
 
         response = get_tile_handler(zoom, tile_x, tile_y, ts, forecast_secs)
         assert response.status_code == 200
 
-        img = Image.open(io.BytesIO(response.content))
-        if "dbz_u8" in file_path.name:
+        raw_data_file_path.write_bytes(response.content)
+    
+    image_file_path = raw_data_file_path.with_suffix(".png")
+    if not image_file_path.exists() or not USE_CACHE:
+        img = Image.open(raw_data_file_path)
+        if "dbz_u8" in image_file_path.name:
             img = process_dbz_u8(img)
-        img.save(file_path)
+        img.save(image_file_path)
 
-    return file_path
+    return image_file_path
 
 
 def download_map_image(zoom, tile_x, tile_y):
     file_path = IMAGES_DIR / f"map_{zoom}_{tile_x}_{tile_y}.png"
 
-    if not file_path.exists():
+    if not file_path.exists() or False:
         url = f"https://api.maptiler.com/maps/0199e42b-f3ba-728f-81a6-ba4d151cc8fb/{zoom}/{tile_x}/{tile_y}.png?key={api_secrets.MAPTILER_API_KEY}"
         headers = {"User-Agent": "TileFetcher/1.0 (your.email@example.com)"}
         print(f"Downloading map image from {url}...")
         r = requests.get(url, headers=headers, timeout=10)
 
         if r.status_code != 200:
-            raise RuntimeError(f"Failed to fetch tile: {r.status_code}")
-        
-        with open(file_path, "wb") as f:
-            f.write(r.content)
+            # raise RuntimeError(f"Failed to fetch tile: {r.status_code}")
+            print(f"Failed to fetch tile: {r.status_code}, generating blank tile instead")
+            blank_img = Image.new("RGB", (256, 256), color=(10, 20, 10))
+            blank_img.save(file_path)
+        else:
+            with open(file_path, "wb") as f:
+                f.write(r.content)
     return file_path
 
 
@@ -243,12 +261,12 @@ def download_range_of_tiles(zoom, tile_start_x, tile_start_y, tile_end_x, tile_e
     precip_tiles_forecast = {}
     for x in range(tile_start_x, tile_end_x + 1):
         for y in range(tile_start_y, tile_end_y + 1):
-            im_path = download_map_image(zoom, x, y)
-            map_tiles[(x, y)] = Image.open(im_path)
             im_path = download_precip_image(zoom, x, y, ts, now_offset)
             precip_tiles_now[(x, y)] = Image.open(im_path)
             im_path = download_precip_image(zoom, x, y, ts, forecast_secs)
             precip_tiles_forecast[(x, y)] = Image.open(im_path)
+            im_path = download_map_image(zoom, x, y)
+            map_tiles[(x, y)] = Image.open(im_path)
 
     # assert all the values of each on the same size
     assert len(set(im.size for im in map_tiles.values())) == 1
@@ -591,7 +609,7 @@ def build_rain_image() -> ImageWrapped:
     # and draw the forecast over it
     # precip_now_img = precip_now_img.
     precip_now_img = np.array(precip_now_img)
-    precip_now_img[precip_now_img[:,:,3] != 0] = intensity_to_color(INTENSITY_MIN)
+    precip_now_img[precip_now_img[:,:,3] != 0] = intensity_to_color(INTENSITY_MIN, is_snow=False)
     precip_now_img = Image.fromarray(precip_now_img)
     # precip_now_img.save("debug_precip_now.png")
     assert precip_now_img.mode == "RGBA"
@@ -651,7 +669,7 @@ def build_rain_image() -> ImageWrapped:
         (DESIRED_WIDTH, DESIRED_HEIGHT), resample=Image.BILINEAR
     )
 
-    return ImageWrapped(image=combined, add_legend=True, add_text=True, draw_extra_info=True, draw_battery_info=True)
+    return ImageWrapped(image=combined, add_legend=False, add_text=True, draw_extra_info=True, draw_battery_info=True)
 
 def build_from_path(image_filename: str) -> ImageWrapped:
     original_image = Image.open(image_filename).convert("RGB")
@@ -746,7 +764,7 @@ def build_image(deploy_idx: int):
         if current_dt.date() in overrides:
             image_wrapped = overrides[current_dt.date()]()
         else:
-            image_wrapped = build_blake_image(1)
+            image_wrapped = build_from_path(IMAGES_DIR / "blake_01.jpg")
     else:
         next_wake = get_next_wake_time()
         image_wrapped = build_rain_image()
@@ -801,7 +819,7 @@ def convert_to_bitmap(img_wrapped: ImageWrapped, pico_variant: PicoType, next_wa
         legend_start_y = DESIRED_HEIGHT - legend_height - 3
         for i in range(int(legend_width)):
             intensity = int((i / legend_width) * (INTENSITY_MAX - INTENSITY_MIN) + INTENSITY_MIN)
-            color = intensity_to_color(intensity)
+            color = intensity_to_color(intensity, is_snow=False)
             if color[3] != 0:
                 for y in range(int(legend_height)):
                     img.putpixel((int(legend_start_x + i), int(legend_start_y + y)), color)
