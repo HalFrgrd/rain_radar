@@ -23,11 +23,7 @@ import math
 IMAGES_DIR = Path("images")
 IMAGES_DIR.mkdir(exist_ok=True)
 
-PRECIP_NOW_TILE_FILE = IMAGES_DIR / ("precip_now.png")
-PRECIP_FORECAST_TILE_FILE = IMAGES_DIR / ("precip_forecast.png")
-MAP_TILE_FILE = IMAGES_DIR / ("map.png")
 QRCODE_FILE = IMAGES_DIR / ("qrcode.png")
-COMBINED_FILE = IMAGES_DIR / ("combined.jpg")
 QUANTIZED_BIN_FILE = IMAGES_DIR / ("quantized.bin")
 QUANTIZED_PICO2W_BIN_FILE = IMAGES_DIR / ("quantized_pico2_w.bin")
 QUANTIZED_PNG_FILE = QUANTIZED_BIN_FILE.with_suffix(".png")
@@ -194,7 +190,7 @@ def process_dbz_u8(img: Image) -> Image:
 def download_precip_image(zoom, tile_x, tile_y, ts, forecast_secs):
     raw_data_file_path = IMAGES_DIR / f"precip_{zoom}_{tile_x}_{tile_y}_{ts}_{forecast_secs}_dbz_u8.raw"
     
-    USE_CACHE = False
+    USE_CACHE = True
     if not raw_data_file_path.exists() or not USE_CACHE:
         print("Downloading forecast image...")
 
@@ -216,7 +212,8 @@ def download_precip_image(zoom, tile_x, tile_y, ts, forecast_secs):
 def download_map_image(zoom, tile_x, tile_y):
     file_path = IMAGES_DIR / f"map_{zoom}_{tile_x}_{tile_y}.png"
 
-    if not file_path.exists() or False:
+    USE_CACHE = True
+    if not file_path.exists() or not USE_CACHE:
         url = f"https://api.maptiler.com/maps/0199e42b-f3ba-728f-81a6-ba4d151cc8fb/{zoom}/{tile_x}/{tile_y}.png?key={api_secrets.MAPTILER_API_KEY}"
         headers = {"User-Agent": "TileFetcher/1.0 (your.email@example.com)"}
         print(f"Downloading map image from {url}...")
@@ -279,7 +276,6 @@ def download_range_of_tiles(zoom, tile_start_x, tile_start_y, tile_end_x, tile_e
     map_tile_width, map_tile_height = next(iter(map_tiles.values())).size
     precip_tile_width, precip_tile_height = next(iter(precip_tiles_forecast.values())).size
 
-
     combined_map = Image.new("RGB", (map_tile_width * num_tiles_x, map_tile_height * num_tiles_y))
     combined_precip_now = Image.new("RGBA", (precip_tile_width * num_tiles_x, precip_tile_height * num_tiles_y))
     combined_precip_forecast = Image.new("RGBA", (precip_tile_width * num_tiles_x, precip_tile_height * num_tiles_y))
@@ -294,10 +290,11 @@ def download_range_of_tiles(zoom, tile_start_x, tile_start_y, tile_end_x, tile_e
             combined_precip_now.paste(precip_tile_now, (ix * precip_tile_width, iy * precip_tile_height))
             combined_precip_forecast.paste(precip_tile_forecast, (ix * precip_tile_width, iy * precip_tile_height))
 
-    combined_map.save(MAP_TILE_FILE)
-    combined_precip_now.save(PRECIP_NOW_TILE_FILE)
-    combined_precip_forecast.save(PRECIP_FORECAST_TILE_FILE)
-    print("Combined map and precipitation tiles into single images.")
+    return {
+        "map": combined_map,
+        "precip_now": combined_precip_now,
+        "precip_forecast": combined_precip_forecast
+    }
 
 
 def draw_star(draw: ImageDraw.Draw, x: int, y: int, size: int, outer_radius: int = None, colour=WHITE):
@@ -588,7 +585,7 @@ def build_rain_image() -> ImageWrapped:
 
     print(f"Snapshot timestamp: {snapshot_utc_ts}")
     FORECAST_SECS = 1800
-    download_range_of_tiles(ZOOM, TILE_X, TILE_Y, TILE_X+1, TILE_Y+1, snapshot_utc_ts, now_offset, FORECAST_SECS)
+    images = download_range_of_tiles(ZOOM, TILE_X, TILE_Y, TILE_X+1, TILE_Y+1, snapshot_utc_ts, now_offset, FORECAST_SECS)
 
     with open(IMAGE_INFO_FILE, "w") as f:
         current_time_dt = int(dt.datetime.now(tz=ZoneInfo("Europe/London")).timestamp())
@@ -600,10 +597,10 @@ def build_rain_image() -> ImageWrapped:
 
     qr_code_image()
 
-    map_img = Image.open(MAP_TILE_FILE).convert("RGBA")
-    precip_now_img = Image.open(PRECIP_NOW_TILE_FILE).convert("RGBA")
-    precip_forecast_img = Image.open(PRECIP_FORECAST_TILE_FILE).convert("RGBA")
-    qr_img = Image.open(QRCODE_FILE).convert("RGBA")
+    map_img = images["map"].convert("RGBA")
+    precip_now_img = images["precip_now"].convert("RGBA")
+    precip_forecast_img = images["precip_forecast"].convert("RGBA")
+    # qr_img = Image.open(QRCODE_FILE).convert("RGBA")
 
     # turn the old precip data into the lightest intensity
     # and draw the forecast over it
@@ -849,9 +846,6 @@ def convert_to_bitmap(img_wrapped: ImageWrapped, pico_variant: PicoType, next_wa
         padding = 8
         x = padding
         y = quantized_img.size[1] - TEXT_HEIGHT - padding
-
-        print(f"Adding text to image: {image_text}")
-
 
         draw.text((x, y), image_text, font=font, fill=(0, 0, 0), stroke_width=3, stroke_fill=(0,0,0))
         draw.text((x, y), image_text, font=font, fill=(255, 255, 255))
