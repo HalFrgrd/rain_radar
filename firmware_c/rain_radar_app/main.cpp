@@ -68,23 +68,22 @@ void draw_error(InkyFrame &graphics, const std::string_view &msg)
     graphics.text(msg, Point(graphics.width / 3 + 5, graphics.height * 2 / 3 + 5), graphics.width / 3 - 5, 2);
 }
 
-// void draw_lower_left_text(InkyFrame &graphics, const std::string_view &msg)
-// {
-//     // graphics.set_pen(Colours::BLACK);
-//     // graphics.rectangle(Rect(0, graphics.height - 25, graphics.width, 25));
-//     graphics.set_pen(Colours::WHITE);
-//     graphics.text(msg, Point(5, graphics.height - 17), graphics.width / 2, 2);
-// }
+void draw_text_with_background(InkyFrame &graphics, const std::string_view &msg, Point position, uint8_t font_size, Colours text_colour, Colours background_colour)
+{
+    int text_width = graphics.measure_text(msg, font_size);
+    const int text_height = font_size * 9; // approximate height for font size
+    const int text_x_padding = 2;
+    graphics.set_pen(background_colour);
+    graphics.rectangle(Rect(position.x - text_x_padding, position.y - 1, text_width + 2*text_x_padding, text_height));
+    graphics.set_pen(text_colour);
+    graphics.text(msg, position, graphics.width, font_size);
+}
+
 
 void draw_battery_status(InkyFrame &graphics, const char *status)
 {
-    graphics.set_pen(Colours::WHITE);
-
-    // Measure text width to right-align it
     int text_width = graphics.measure_text(status, 1);
-    int x_position = graphics.width - text_width - 5; // 5 pixels from right edge
-
-    graphics.text(status, Point(x_position, 5), graphics.width, 1); // Small text at top
+    draw_text_with_background(graphics, status, Point(graphics.width - text_width - 5, graphics.height - 10), 1, Colours::WHITE, Colours::BLACK);
 }
 
 datetime_t dt = {
@@ -137,9 +136,9 @@ void draw_next_wakeup(InkyFrame &graphics, int hour, int minute)
 
     int text_width = graphics.measure_text(oss.str(), 1);
 
-    graphics.set_pen(Colours::WHITE);
-    graphics.text(oss.str(), Point(graphics.width-60 - text_width, 5), graphics.width, 1);
+    draw_text_with_background(graphics, oss.str(), Point(graphics.width - 60 - text_width, graphics.height - 10), 1, Colours::WHITE, Colours::BLACK);
 }
+
 
 
 
