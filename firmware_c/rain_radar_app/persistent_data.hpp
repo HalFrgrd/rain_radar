@@ -5,7 +5,7 @@
 #include "hardware/flash.h" // for the flash erasing and writing
 #include "hardware/sync.h"  // for the interrupts
 
-#define FLASH_TARGET_OFFSET (1536 * 1024) // choosing to start at 1.5MB into flash, so we don't overwrite the program
+#define FLASH_TARGET_OFFSET (1800 * 1024) // choosing to start at 1.8MB into flash, so we don't overwrite the program
 
 namespace persistent
 {
