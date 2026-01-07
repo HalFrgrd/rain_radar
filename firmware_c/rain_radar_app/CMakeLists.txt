@@ -1,14 +1,23 @@
 cmake_minimum_required(VERSION 3.12)
 
-
-# set(PICO_BOARD pico_w)
-
-# this can be set here or from the command line
+# Auto-detect PICO_BOARD from build directory name if not set
 if(NOT DEFINED PICO_BOARD)
-    set(PICO_BOARD pico_w)
-    # set(PICO_BOARD pico2_w)
-    # message(FATAL_ERROR "PICO_BOARD must be set. Either uncomment one of the above lines or set it from command line (e.g., -DPICO_BOARD=pico2_w)")
+    get_filename_component(BUILD_DIR_NAME ${CMAKE_BINARY_DIR} NAME)
+    if(BUILD_DIR_NAME MATCHES "pico2_w")
+        set(PICO_BOARD pico2_w)
+        message(STATUS "Auto-detected PICO_BOARD=pico2_w from build directory: ${BUILD_DIR_NAME}")
+    elseif(BUILD_DIR_NAME MATCHES "pico_w")
+        set(PICO_BOARD pico_w)
+        message(STATUS "Auto-detected PICO_BOARD=pico_w from build directory: ${BUILD_DIR_NAME}")
+    else()
+        # Default to pico2_w if no match
+        set(PICO_BOARD pico2_w)
+        message(WARNING "Could not detect board from build directory '${BUILD_DIR_NAME}', defaulting to PICO_BOARD=pico2_w")
+        message(STATUS "Tip: Name your build directory with 'pico_w' or 'pico2_w' for auto-detection, or set -DPICO_BOARD=<board> explicitly")
+    endif()
 endif()
+
+message(STATUS "Building for PICO_BOARD=${PICO_BOARD}")
 
 # Change your executable name to something creative!
 set(NAME rain_radar_${PICO_BOARD})

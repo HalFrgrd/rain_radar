@@ -29,11 +29,12 @@ jobs:
           mv secrets_template.h secrets.h &&
           mkdir -p build_pico_w &&
           cd build_pico_w &&
-          cmake .. -DPICO_BOARD=pico_w &&
+          cmake .. &&
           make -j\$(nproc) &&
+          cd .. &&
           mkdir -p build_pico2_w &&
           cd build_pico2_w &&
-          cmake .. -DPICO_BOARD=pico2_w &&
+          cmake .. &&
           make -j\$(nproc)
         "
     
