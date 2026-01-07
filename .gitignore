@@ -9,3 +9,5 @@
 *.uf2
 **/server/images/
 **/server/local_images/
+**/build
+**/build_*

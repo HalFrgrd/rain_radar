@@ -38,14 +38,6 @@ jobs:
           make -j\$(nproc)
         "
     
-    - name: List build artifacts
-      run: |
-        cd firmware_c/rain_radar_app/build
-        - name: List build artifacts
-          run: |
-            cd firmware_c/rain_radar_app
-            find build_pico_w build_pico2_w -name "*.uf2" -type f
-
     - name: Upload UF2 artifact
       uses: actions/upload-artifact@v4
       with:
