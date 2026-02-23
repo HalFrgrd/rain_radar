@@ -19,6 +19,7 @@ from PIL import Image, ImageEnhance
 from pathlib import Path
 from PIL import ImageFilter
 import math
+import random
 
 IMAGES_DIR = Path("images")
 IMAGES_DIR.mkdir(exist_ok=True)
@@ -770,6 +771,27 @@ def build_image(deploy_idx: int):
             (d := d + dt.timedelta(days=1)): lambda: build_from_path("local_images/paris_01.jpg"),
             (d := d + dt.timedelta(days=1)): lambda: build_from_path("local_images/party_02.jpg"),
             (d := d + dt.timedelta(days=1)): lambda: build_from_path("local_images/rome.jpg"),
+            (d := dt.date(2026, 2, 15)): lambda: build_from_path("local_images/map_of_spain.png"),
+            (d := d + dt.timedelta(days=1)): lambda: build_from_path("local_images/spanish_tortilla.png"),
+            (d := d + dt.timedelta(days=1)): lambda: build_from_path("local_images/la_chouffe.png"),
+            (d := d + dt.timedelta(days=1)): lambda: build_from_path("local_images/wod_1.png"),
+            (d := d + dt.timedelta(days=1)): lambda: build_from_path("local_images/campari.png"),
+            (d := d + dt.timedelta(days=1)): lambda: build_from_path("local_images/azores_1.png"),
+            (d := d + dt.timedelta(days=1)): lambda: build_from_path("local_images/azores_2.png"),
+            (d := d + dt.timedelta(days=1)): lambda: build_from_path("local_images/smoking_monkey.png"),
+            (d := d + dt.timedelta(days=1)): lambda: build_from_path("local_images/dog.png"),
+            (d := d + dt.timedelta(days=1)): lambda: build_from_path("local_images/dog.png"),
+            (d := d + dt.timedelta(days=1)): lambda: build_from_path("local_images/sculpture_1.png"),
+            (d := d + dt.timedelta(days=1)): lambda: build_from_path("local_images/sculpture_2.png"),
+            (d := d + dt.timedelta(days=1)): lambda: build_from_path("local_images/sculpture_3.png"),
+            (d := d + dt.timedelta(days=1)): lambda: build_from_path("local_images/sculpture_4.png"),
+            (d := d + dt.timedelta(days=1)): lambda: build_from_path("local_images/swiss_guard.png"),
+            (d := d + dt.timedelta(days=1)): lambda: build_from_path("local_images/flaming_june.png"),
+            (d := d + dt.timedelta(days=1)): lambda: build_from_path("local_images/great_wave.png"),
+            (d := d + dt.timedelta(days=1)): lambda: build_from_path("local_images/one_battle_after_another.png"),
+            (d := d + dt.timedelta(days=1)): lambda: build_from_path("local_images/wuthering_heights.png"),
+            (d := d + dt.timedelta(days=1)): lambda: build_from_path("local_images/frankenstein.png"),
+            (d := d + dt.timedelta(days=1)): lambda: build_from_path("local_images/my_brilliant_friend.png"),
         }
         for k,v in overrides.items():
             print(f"Override available for {k}: {v}")
@@ -777,7 +799,7 @@ def build_image(deploy_idx: int):
         if current_dt.date() in overrides:
             image_wrapped = overrides[current_dt.date()]()
         else:
-            image_wrapped = build_from_path(IMAGES_DIR / "blake_01.jpg")
+            image_wrapped = random.choice(list(overrides.values()))()
     else:
         next_wake = get_next_wake_time()
         image_wrapped = build_rain_image()
