@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-source api_secrets.py
+source /home/hfrigaard/inky_frame/server/api_secrets.py
 
 TMP_OUTPUT=$(mktemp)
 
