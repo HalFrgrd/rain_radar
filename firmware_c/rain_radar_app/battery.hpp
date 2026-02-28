@@ -49,7 +49,7 @@ public:
     const char* get_status_string();
 
 private:
-    static constexpr float MIN_BATTERY_VOLTAGE = 3.0f;
+    static constexpr float MIN_BATTERY_VOLTAGE = 3.6f;
     static constexpr float MAX_BATTERY_VOLTAGE = 4.2f;
     static constexpr int SAMPLE_COUNT = 3;
     static constexpr int PICO_FIRST_ADC_PIN = 26;
