@@ -19,6 +19,7 @@ from PIL import Image, ImageEnhance
 from pathlib import Path
 from PIL import ImageFilter
 import math
+import random
 
 IMAGES_DIR = Path("images")
 IMAGES_DIR.mkdir(exist_ok=True)
@@ -715,53 +716,22 @@ def build_image(deploy_idx: int):
     current_dt = dt.datetime.now()
     current_hour = current_dt.hour
     
-    if deploy_idx == 9:
-        image_wrapped = build_from_path("local_images/blake_new_years.jpg")
-        next_wake = get_next_wake_time()
-    elif current_hour >= 20 or current_hour < 6:
+    if current_hour >= 20 or current_hour < 6:
         image_wrapped = build_moon_image(True if deploy_idx == 4 else False)
         next_wake = get_next_wake_time()
     elif deploy_idx == 4:
         next_wake = get_next_wake_time(short_refresh=49, long_refresh=49)
-        
-        overrides = {
-            (d := dt.date(2025, 12, 25)): lambda: build_greetings_image(),
-            (d := dt.date(2025, 12, 26)): lambda: build_from_path(IMAGES_DIR / "blake_01.jpg"),
-            (d := dt.date(2025, 12, 27)): lambda: build_from_path("local_images/holiday_01.jpeg"),
-            (d := dt.date(2025, 12, 28)): lambda: build_from_path(IMAGES_DIR / "blake_03.jpg"),
-            (d := dt.date(2025, 12, 29)): lambda: build_from_path("local_images/holiday_02.jpg"),
-            (d := dt.date(2025, 12, 30)): lambda: build_from_path("local_images/ballerinas.jpg"),
-            (d := d + dt.timedelta(days=1)): lambda: build_from_path(IMAGES_DIR / "blake_03.jpg"),
-            (d := d + dt.timedelta(days=1)): lambda: build_from_path("local_images/blake_new_years.jpg"),
-            (d := d + dt.timedelta(days=1)): lambda: build_from_path("local_images/holiday_03.jpg"),
-            (d := d + dt.timedelta(days=1)): lambda: build_from_path(IMAGES_DIR / "blake_05.jpg"),
-            (d := d + dt.timedelta(days=1)): lambda: build_from_path("local_images/holiday_04.jpg"),
-            (d := d + dt.timedelta(days=1)): lambda: build_from_path(IMAGES_DIR / "blake_06.jpg"),
-            (d := d + dt.timedelta(days=1)): lambda: build_from_path("local_images/holiday_05.jpg"),
-            (d := d + dt.timedelta(days=1)): lambda: build_from_path(IMAGES_DIR / "blake_07.jpg"),
-            (d := d + dt.timedelta(days=1)): lambda: build_from_path("local_images/holiday_06.jpg"),
-            (d := d + dt.timedelta(days=1)): lambda: build_from_path(IMAGES_DIR / "blake_08.jpg"),
-            (d := d + dt.timedelta(days=1)): lambda: build_from_path("local_images/holiday_07.jpg"),
-            (d := d + dt.timedelta(days=1)): lambda: build_from_path(IMAGES_DIR / "blake_09.jpg"),
-            (d := d + dt.timedelta(days=1)): lambda: build_from_path(IMAGES_DIR / "blake_10.jpg"),
-            (d := d + dt.timedelta(days=1)): lambda: build_from_path(IMAGES_DIR / "blake_11.jpg"),
-            (d := d + dt.timedelta(days=1)): lambda: build_from_path(IMAGES_DIR / "blake_12.jpg"),
-            (d := d + dt.timedelta(days=1)): lambda: build_from_path(IMAGES_DIR / "blake_13.jpg"),
-            (d := d + dt.timedelta(days=1)): lambda: build_from_path(IMAGES_DIR / "blake_14.jpg"),
-            (d := d + dt.timedelta(days=1)): lambda: build_from_path(IMAGES_DIR / "blake_15.jpg"),
-            (d := d + dt.timedelta(days=1)): lambda: build_from_path(IMAGES_DIR / "blake_16.jpg"),
-            (d := d + dt.timedelta(days=1)): lambda: build_from_path(IMAGES_DIR / "blake_17.jpg"),
-            (d := d + dt.timedelta(days=1)): lambda: build_from_path(IMAGES_DIR / "blake_18.jpg"),
-            (d := d + dt.timedelta(days=1)): lambda: build_from_path(IMAGES_DIR / "blake_19.jpg"),
-            (d := d + dt.timedelta(days=1)): lambda: build_from_path(IMAGES_DIR / "blake_20.jpg"),
-        }
-        for k,v in overrides.items():
-            print(f"Override available for {k}: {v}")
 
-        if current_dt.date() in overrides:
-            image_wrapped = overrides[current_dt.date()]()
-        else:
-            image_wrapped = build_from_path(IMAGES_DIR / "blake_01.jpg")
+        BASE_IMAGE_PATH = Path("local_images/")
+        
+        hard_coded_images = list(BASE_IMAGE_PATH.glob(f"{current_dt.date()}*"))
+        fallback_images = list(BASE_IMAGE_PATH.glob("*"))
+        random.seed(current_dt.date().toordinal())  # seed with the date so it changes daily but is the same for everyone
+        random.shuffle(hard_coded_images)
+
+        image_to_use = hard_coded_images[0] if len(hard_coded_images) > 0 else fallback_images[0]
+        image_wrapped = build_from_path(image_to_use)
+
     else:
         next_wake = get_next_wake_time()
         image_wrapped = build_rain_image()
