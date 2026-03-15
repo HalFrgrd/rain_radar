@@ -729,7 +729,8 @@ def build_image(deploy_idx: int):
         random.seed(current_dt.date().toordinal())  # seed with the date so it changes daily but is the same for everyone
         random.shuffle(hard_coded_images)
 
-        image_to_use = hard_coded_images[0] if len(hard_coded_images) > 0 else fallback_images[0]
+        image_to_use = hard_coded_images[0] if hard_coded_images else fallback_images[0]
+        print(f"Using image {image_to_use} for deployment index {deploy_idx}")
         image_wrapped = build_from_path(image_to_use)
 
     else:
