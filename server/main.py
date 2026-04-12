@@ -727,7 +727,8 @@ def build_image(deploy_idx: int):
         hard_coded_images = list(BASE_IMAGE_PATH.glob(f"{current_dt.date()}*"))
         fallback_images = list(BASE_IMAGE_PATH.glob("*"))
         random.seed(current_dt.date().toordinal())  # seed with the date so it changes daily but is the same for everyone
-        random.shuffle(hard_coded_images)
+        random.shuffle(fallback_images)
+        print(f"Found {len(hard_coded_images)} hard coded images for today, {len(fallback_images)} fallback images")
 
         image_to_use = hard_coded_images[0] if hard_coded_images else fallback_images[0]
         print(f"Using image {image_to_use} for deployment index {deploy_idx}")
