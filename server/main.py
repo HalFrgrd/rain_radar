@@ -10,6 +10,8 @@ import functools as ft
 import enum
 import datetime as dt
 import argparse
+import boto3
+from botocore.config import Config
 import api_secrets 
 
 from zoneinfo import ZoneInfo
@@ -870,6 +872,60 @@ def convert_to_bitmap(img_wrapped: ImageWrapped, pico_variant: PicoType, next_wa
 
 
 
+def get_r2_client_and_bucket(env_file_path: Path = Path("/var/lib/inky-frame/r2.env")):
+    # Load from env file if present and readable and env vars aren't already set
+    if not os.environ.get("R2_BUCKET") and env_file_path.exists():
+        try:
+            for line in env_file_path.read_text().splitlines():
+                line = line.strip()
+                if not line or line.startswith("#") or "=" not in line:
+                    continue
+                k, v = line.split("=", 1)
+                os.environ.setdefault(k.strip(), v.strip().strip('"').strip("'"))
+        except OSError:
+            pass
+
+    bucket = os.environ.get("R2_BUCKET") or os.environ.get("R2_BUCKET_NAME")
+    endpoint = os.environ.get("RCLONE_S3_ENDPOINT") or os.environ.get("R2_ENDPOINT")
+    access_key = os.environ.get("RCLONE_S3_ACCESS_KEY_ID") or os.environ.get("R2_ACCESS_KEY_ID")
+    secret_key = os.environ.get("RCLONE_S3_SECRET_ACCESS_KEY") or os.environ.get("R2_SECRET_ACCESS_KEY")
+
+    if not all([bucket, endpoint, access_key, secret_key]):
+        print("Warning: R2 credentials incomplete; skipping Cloudflare R2 upload.")
+        return None, None
+
+    s3_client = boto3.client(
+        "s3",
+        endpoint_url=endpoint,
+        aws_access_key_id=access_key,
+        aws_secret_access_key=secret_key,
+        region_name="auto",
+        config=Config(signature_version="s3v4", connect_timeout=10, read_timeout=30),
+    )
+    return s3_client, bucket
+
+
+def upload_to_r2(s3_client, bucket: str, deploy_idx: int, files: list[Path]):
+    content_types = {
+        ".png": "image/png",
+        ".bin": "application/octet-stream",
+        ".txt": "text/plain; charset=utf-8",
+    }
+    for file_path in files:
+        key = f"{deploy_idx}/{file_path.name}"
+        content_type = content_types.get(file_path.suffix, "application/octet-stream")
+        s3_client.upload_file(
+            str(file_path),
+            bucket,
+            key,
+            ExtraArgs={
+                "ContentType": content_type,
+                "CacheControl": "no-store, no-cache, must-revalidate, max-age=0",
+            },
+        )
+    print(f"Uploaded {len(files)} files to R2 bucket '{bucket}/{deploy_idx}/'")
+
+
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("--deploy", action="store_true", help="Copy the generated combined image to the deployment directory")
@@ -884,16 +940,29 @@ if __name__ == "__main__":
                 file.unlink()
 
     base_deploy_dir = Path(args.deploy_dir)
+    s3_client, r2_bucket = (get_r2_client_and_bucket() if args.deploy else (None, None))
+
+    deploy_files = [
+        QUANTIZED_PNG_FILE,
+        QUANTIZED_PICO2W_PNG_FILE,
+        QUANTIZED_BIN_FILE,
+        QUANTIZED_PICO2W_BIN_FILE,
+        IMAGE_INFO_FILE,
+    ]
 
     for i in range(10):
         build_image(i)
         if args.deploy:
             deploy_dir = base_deploy_dir / str(i)
             deploy_dir.mkdir(parents=True, exist_ok=True)
-            shutil.copy(QUANTIZED_PNG_FILE, deploy_dir / QUANTIZED_PNG_FILE.name)
-            shutil.copy(QUANTIZED_PICO2W_PNG_FILE, deploy_dir / QUANTIZED_PICO2W_PNG_FILE.name)
-            shutil.copy(QUANTIZED_BIN_FILE, deploy_dir / QUANTIZED_BIN_FILE.name)
-            shutil.copy(QUANTIZED_PICO2W_BIN_FILE, deploy_dir / QUANTIZED_PICO2W_BIN_FILE.name)
-            shutil.copy(IMAGE_INFO_FILE, deploy_dir / IMAGE_INFO_FILE.name)
+            for file_path in deploy_files:
+                shutil.copy(file_path, deploy_dir / file_path.name)
             print(f"Copied images to {deploy_dir}")
+
+            if s3_client and r2_bucket:
+                try:
+                    upload_to_r2(s3_client, r2_bucket, i, deploy_files)
+                except Exception as e:
+                    print(f"Error uploading index {i} to R2: {e}")
+
 
