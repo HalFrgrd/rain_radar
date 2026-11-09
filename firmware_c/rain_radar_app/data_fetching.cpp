@@ -29,7 +29,7 @@
 #include "pico/types.h"
 #include "pico/config.h" 
 
-#define HOST "muse-hub.taile8f45.ts.net"
+#define HOST "inkyframe.halfrigaard.com"
 
 namespace data_fetching
 {
