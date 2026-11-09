@@ -1,4 +1,3 @@
-import shutil
 import requests
 import qrcode
 import os
@@ -928,8 +927,7 @@ def upload_to_r2(s3_client, bucket: str, deploy_idx: int, files: list[Path]):
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
-    parser.add_argument("--deploy", action="store_true", help="Copy the generated combined image to the deployment directory")
-    parser.add_argument("--deploy-dir", type=str, default="/var/lib/inky-frame/publicly_available", help="Deployment target directory")
+    parser.add_argument("--deploy", action="store_true", help="Upload the generated images to Cloudflare R2")
     parser.add_argument("--clean-up", action="store_true", help="Delete old precipiation data")
     args = parser.parse_args()
 
@@ -939,7 +937,6 @@ if __name__ == "__main__":
                 print(f"Deleting old precipitation file: {file}")
                 file.unlink()
 
-    base_deploy_dir = Path(args.deploy_dir)
     s3_client, r2_bucket = (get_r2_client_and_bucket() if args.deploy else (None, None))
 
     deploy_files = [
@@ -947,22 +944,15 @@ if __name__ == "__main__":
         QUANTIZED_PICO2W_PNG_FILE,
         QUANTIZED_BIN_FILE,
         QUANTIZED_PICO2W_BIN_FILE,
-        IMAGE_INFO_FILE,
     ]
 
     for i in range(10):
         build_image(i)
-        if args.deploy:
-            deploy_dir = base_deploy_dir / str(i)
-            deploy_dir.mkdir(parents=True, exist_ok=True)
-            for file_path in deploy_files:
-                shutil.copy(file_path, deploy_dir / file_path.name)
-            print(f"Copied images to {deploy_dir}")
+        if args.deploy and s3_client and r2_bucket:
+            try:
+                upload_to_r2(s3_client, r2_bucket, i, deploy_files)
+            except Exception as e:
+                print(f"Error uploading index {i} to R2: {e}")
 
-            if s3_client and r2_bucket:
-                try:
-                    upload_to_r2(s3_client, r2_bucket, i, deploy_files)
-                except Exception as e:
-                    print(f"Error uploading index {i} to R2: {e}")
 
 
